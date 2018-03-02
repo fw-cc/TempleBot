@@ -64,6 +64,7 @@ async def on_member_join(member):
                                    '\n\nTo see how role based commands work use: `{0}help role`.'
                            .format(cmd_prefix))
     pingrole_obj = discord.utils.get(member.server.roles, name="Pingrole")
+    asyncio.sleep(600) # The server this bot is used on has a 10 minute wait period before you can talk, this enforces it.
     await bot.add_roles(member, pingrole_obj)
     logger.info("Successfully messaged and added new user to pingrole.")
 
