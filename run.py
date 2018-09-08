@@ -281,7 +281,7 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
 @bot.command(pass_context=True)
 async def start_vote(ctx, candidate_list=""):
     if ctx.message.author.id != owner_id:
-        logger.warning("User: {} attempted to shut the bot down but doesn't have correct permissions!"
+        logger.warning("User: {} attempted to run a vote but doesn't have correct permissions!"
                        .format(ctx.message.author))
         return
     candidate_list = candidate_list.split()
