@@ -12,7 +12,7 @@ print("Assigning variables...")
 b_token = "Your bot token in here"
 cmd_prefix = "!"
 bot = commands.Bot(command_prefix=cmd_prefix)
-owner_id = 103595773379223552
+owner_id = ownerIDHere
 vote_file_in_use = False
 vote_file_queue = []
 
