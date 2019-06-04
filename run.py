@@ -191,7 +191,7 @@ async def anime_title_request(message_class):
     item_embed.set_footer(text="Data scraped with JikanPy", icon_url="https://i.imgur.com/fSPtnoP.png")
     item_embed.set_author(name="GCHQBot", icon_url=bot_avatar_url, url="https://github.com/Pytato/GCHQBot")
     item_embed.set_thumbnail(url=new_img_url)
-    item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'])
+    item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
 
     date_format = "%Y-%m-%d"
     now = datetime.now()
