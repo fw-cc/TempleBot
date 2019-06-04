@@ -134,8 +134,10 @@ async def anime_title_request(message_class):
     logger.debug("API Request complete.")
     reduce_req_counters = asyncio.ensure_future(mal_rate_limit_down_counter())
 
+    '''
     # Time to begin packaging the embed for returning to the user.
     pprint.pprint(r_obj_raw["results"][0])
+    '''
 
     r_obj = r_obj_raw['results'][0]
     if r_obj['title'] in blocked_mal_search_results:
@@ -198,9 +200,6 @@ async def anime_title_request(message_class):
 
     start_obj = None
 
-    if r_obj['episodes'] == 0:
-        r_obj['episodes'] = "?"
-
     if r_obj['end_date'] is None:
         end = "?"
     else:
@@ -211,21 +210,49 @@ async def anime_title_request(message_class):
         start = r_obj['start_date'].split("T")[0]
         start_obj = datetime.strptime(start, date_format)
 
-    if r_obj['airing']:
-        release_status = "Airing"
-        if start_obj > now and start != "?":
-            release_status = "Not Yet Airing"
-    else:
-        release_status = "Finished"
+    if req_type == "anime":
+        if r_obj['episodes'] == 0:
+            r_obj['episodes'] = "?"
 
-    item_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
-                                                       f"To: {end}\n"
-                                                       f"Status: {release_status}\n"
-                                                       f"Episode Count: {r_obj['episodes']}", inline=True)
-    item_embed.add_field(name="OtherDetails:", value=f"Score: {r_obj['score']}\n"
-                                                     f"Age Rating: {r_obj['rated']}\n"
-                                                     f"My Anime List ID: {r_obj['mal_id']}\n"
-                                                     f"Members: "+"{:,}".format(r_obj['members']), inline=True)
+        if r_obj['airing']:
+            release_status = "Airing"
+            if start_obj > now and start != "?":
+                release_status = "Not Yet Airing"
+        else:
+            release_status = "Finished"
+
+        item_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
+                                                           f"To: {end}\n"
+                                                           f"Status: {release_status}\n"
+                                                           f"Episode Count: {r_obj['episodes']}", inline=True)
+        item_embed.add_field(name="OtherDetails:", value=f"Score: {r_obj['score']}\n"
+                                                         f"Age Rating: {r_obj['rated']}\n"
+                                                         f"My Anime List ID: {r_obj['mal_id']}\n"
+                                                         f"Members: "+"{:,}".format(r_obj['members']), inline=True)
+    else:
+        if r_obj['volumes'] == 0:
+            r_obj['volumes'] = "?"
+
+        if r_obj['publishing']:
+            release_status = "Publishing"
+            if start_obj > now and start != "?":
+                release_status = "Not Yet Publishing"
+        else:
+            release_status = "Finished"
+
+        try:
+            r_obj['rated']
+        except KeyError:
+            r_obj['rated'] = "No Rating"
+
+        item_embed.add_field(name="Publishing Details:", value=f"From: {start}\n"
+                                                               f"To: {end}\n"
+                                                               f"Status: {release_status}\n"
+                                                               f"Volume Count: {r_obj['volumes']}", inline=True)
+        item_embed.add_field(name="OtherDetails:", value=f"Score: {r_obj['score']}\n"
+                                                         f"Age Rating: {r_obj['rated']}\n"
+                                                         f"My Anime List ID: {r_obj['mal_id']}\n"
+                                                         f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
     await weeb_shit_channel.send("", embed=item_embed)
     await reduce_req_counters
