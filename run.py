@@ -1,19 +1,33 @@
 import logging
 from discord.ext import commands
+from jikanpy import AioJikan
 import discord
 import asyncio
+import aiofiles
+import aiohttp
 import os
 import sys
 import json
 import random
 import math
+import pprint
+import binascii
+import struct
+from datetime import datetime
+from PIL import Image
+import numpy as np
+import scipy
+import scipy.misc
+import scipy.cluster
 
 print("Assigning variables...")
-b_token = "Your bot token in here"
+b_token = "Bot token goes here"
 cmd_prefix = "!"
 bot = commands.Bot(command_prefix=cmd_prefix)
-owner_id = 103595773379223552
+owner_id = 0000000000000000000000
 vote_file_in_use = False
+current_mal_req_count_ps = 0
+current_mal_req_count_pm = 0
 vote_file_queue = []
 
 role_dict = {"soton":               "Houthsampton (Soton)",
@@ -25,7 +39,7 @@ role_dict = {"soton":               "Houthsampton (Soton)",
              "leeds":               "REEEEEEEEEDS (Leeds)",
              "surrey":              "Soorreey (Surrey)",
              "bristol":             "Brihstool (Bristol)",
-             "weeaboo":             "ðŸŽŒWeeabooðŸŽŒ",
+             "weeaboo":             "🎌Weeaboo🎌",
              "hearthstone":         "Hearthstone",
              "purple":              "Purple",
              "blue":                "Blue",
@@ -51,6 +65,10 @@ protected_role_list = ["❄ Snowflake ❄",
                        "OC Memer",
                        "Ascended"]
 extra_exclusion_colours = ["2C2F33", "23272A", "99AAB5", "2B2B2B", "212121"]
+blocked_mal_search_results = [
+    "Boku no Pico"
+]
+
 watching = discord.Activity(type=discord.ActivityType.watching, name="you")
 
 parsed_role_list_text = ""
@@ -71,9 +89,155 @@ async def clean_colour_roles(context_guild):
     logger.info("Cleaned out empty colour roles")
 
 
+async def mal_rate_limit_down_counter():
+    global current_mal_req_count_pm
+    global current_mal_req_count_ps
+
+    await asyncio.sleep(2)
+    current_mal_req_count_ps -= 1
+    logger.debug("Reduced per second count.")
+    await asyncio.sleep(58)
+    current_mal_req_count_pm -= 1
+    logger.debug("Reduced per minute count.")
+
+
+async def anime_title_request(message_class):
+    global current_mal_req_count_pm
+    global current_mal_req_count_ps
+
+    if message_class.content.startswith("["):
+        req_type = "manga"
+    elif message_class.content.startswith("{"):
+        req_type = "anime"
+    else:
+        return None
+
+    query_term = message_class.content.strip("{}[]")
+
+    bot_avatar_url = bot.user.avatar_url
+    weeb_shit_channel = bot.get_channel(354656048218374155)
+
+    paused = True
+    while paused:
+        if current_mal_req_count_pm >= 30:
+            await asyncio.sleep(current_mal_req_count_pm - 30)
+        elif current_mal_req_count_ps >= 2:
+            await asyncio.sleep(1)
+        else:
+            paused = False
+
+    current_mal_req_count_pm += 1
+    current_mal_req_count_ps += 1
+
+    logger.debug("Making API request.")
+    r_obj_raw = await jikanAIO.search(search_type=req_type, query=query_term)
+    logger.debug("API Request complete.")
+    reduce_req_counters = asyncio.ensure_future(mal_rate_limit_down_counter())
+
+    # Time to begin packaging the embed for returning to the user.
+    pprint.pprint(r_obj_raw["results"][0])
+
+    r_obj = r_obj_raw['results'][0]
+    if r_obj['title'] in blocked_mal_search_results:
+        await reduce_req_counters
+        return
+
+    prepro_img_url = r_obj['image_url'].rsplit("?", 1)[0].rsplit(".", 1)
+    new_img_url = prepro_img_url[0]+"l."+prepro_img_url[1]
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(new_img_url) as target_image_res:
+            if target_image_res.status == 200:
+                temp_file = await aiofiles.open(f"./tempfile_{r_obj['mal_id']}.jpg", mode="wb")
+                await temp_file.write(await target_image_res.read())
+                await temp_file.close()
+
+                # CODE HERE USED FOR FINDING DOMINANT COLOUR, by Stack Overflow user: Peter Hansen
+                # https://stackoverflow.com/questions/3241929/python-find-dominant-most-common-color-in-an-image
+                num_clusters = 5
+                im = Image.open(f"./tempfile_{r_obj['mal_id']}.jpg")
+                im = im.resize((150, 210))  # optional, to reduce time
+                ar = np.asarray(im)
+                shape = ar.shape
+                ar = ar.reshape(scipy.product(shape[:2]), shape[2]).astype(float)
+
+                logger.debug('finding clusters')
+                codes, dist = scipy.cluster.vq.kmeans(ar, num_clusters)
+
+                vecs, dist = scipy.cluster.vq.vq(ar, codes)  # assign codes
+                counts, bins = scipy.histogram(vecs, len(codes))  # count occurrences
+
+                index_max = scipy.argmax(counts)  # find most frequent
+                peak = codes[index_max]
+                embed_colour = binascii.hexlify(bytearray(int(c) for c in peak)).decode('ascii')
+
+                im.close()
+                target_image_res.close()
+
+                colour_hex_split = [embed_colour[0:2], embed_colour[2:4], embed_colour[4:6]]
+                colour_dec_split = []
+                for colour in colour_hex_split:
+                    colour_dec = int(colour, 16)
+                    colour_dec_split.append(colour_dec)
+            else:
+                colour_dec_split = [114, 137, 218]  # Discord's "Blurple", in the case that image isn't found
+
+    os.remove(f"./tempfile_{r_obj['mal_id']}.jpg")
+
+    item_embed = discord.Embed(title=(r_obj['title']+" ["+r_obj['type']+"]"), url=r_obj['url'],
+                               colour=discord.Colour.from_rgb(r=colour_dec_split[0],
+                                                              g=colour_dec_split[1],
+                                                              b=colour_dec_split[2]))
+    item_embed.set_footer(text="Data scraped with JikanPy", icon_url="https://i.imgur.com/fSPtnoP.png")
+    item_embed.set_author(name="GCHQBot", icon_url=bot_avatar_url, url="https://github.com/Pytato/GCHQBot")
+    item_embed.set_thumbnail(url=new_img_url)
+    item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'])
+
+    date_format = "%Y-%m-%d"
+    now = datetime.now()
+
+    start_obj = None
+
+    if r_obj['episodes'] == 0:
+        r_obj['episodes'] = "?"
+
+    if r_obj['end_date'] is None:
+        end = "?"
+    else:
+        end = r_obj['end_date'].split("T")[0]
+    if r_obj['start_date'] is None:
+        start = "?"
+    else:
+        start = r_obj['start_date'].split("T")[0]
+        start_obj = datetime.strptime(start, date_format)
+
+    if r_obj['airing']:
+        release_status = "Airing"
+        if start_obj > now and start != "?":
+            release_status = "Not Yet Airing"
+    else:
+        release_status = "Finished"
+
+    item_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
+                                                       f"To: {end}\n"
+                                                       f"Status: {release_status}\n"
+                                                       f"Episode Count: {r_obj['episodes']}", inline=True)
+    item_embed.add_field(name="OtherDetails:", value=f"Score: {r_obj['score']}\n"
+                                                     f"Age Rating: {r_obj['rated']}\n"
+                                                     f"My Anime List ID: {r_obj['mal_id']}\n"
+                                                     f"Members: "+"{:,}".format(r_obj['members']), inline=True)
+
+    await weeb_shit_channel.send("", embed=item_embed)
+    await reduce_req_counters
+
+
 @bot.event
 async def on_connect():
+    global jikanAIO
     await bot.change_presence(activity=watching)
+    mainloop = asyncio.get_event_loop()
+    logger.info("Opening MAL API event loop.")
+    jikanAIO = AioJikan(loop=mainloop)
 
 
 @bot.event
@@ -89,12 +253,22 @@ async def on_ready():
 
 @bot.event
 async def on_message(received_message):
+    global current_mal_req_count_pm
+    global current_mal_req_count_ps
     if received_message.channel.id == 357259932472573956:
         # Upvote downvote BS
         await received_message.add_reaction(upvote_emoji_obj)
         await received_message.add_reaction(downvote_emoji_obj)
-        logger.info("Reacted to message in #memes.")
+        logger.debug("Reacted to message in #memes.")
         return
+
+    if received_message.channel.id == 354656048218374155:
+        if ((received_message.content.startswith("{") or received_message.content.startswith("[")) and
+                (received_message.content[-1] == "}" or received_message.content[-1] == "]")):
+            logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
+                        .format(received_message))
+            await anime_title_request(received_message)
+
     if received_message.channel.id == 354774298172325893 or received_message.channel.id == 364799469130219521 or \
             received_message.channel.id == 192291925326299137:
         if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
@@ -104,11 +278,13 @@ async def on_message(received_message):
             await bot.process_commands(received_message)
         else:
             return
+
     elif received_message.guild is None:  # Indicates a private message
         if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}".'.format(received_message))
             await asyncio.sleep(0.5)
             await bot.process_commands(received_message)
+
     else:
         return
 
@@ -213,9 +389,10 @@ async def list_roles(ctx):
 async def stop_process(ctx):
     if ctx.message.author.id == owner_id:
         await ctx.send(":wave:")
+        await jikanAIO.close()
         await bot.logout()
         logger.warning("Bot has now logged out and is shutting down!")
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
         sys.exit(0)
     else:
         logger.warning("User: {} attempted to shut the bot down but doesn't have correct permissions!"
