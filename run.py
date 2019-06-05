@@ -115,7 +115,6 @@ async def anime_title_request(message_class):
 
     query_term = message_class.content.strip("{}[]")
 
-    bot_avatar_url = bot.user.avatar_url
     weeb_shit_channel = bot.get_channel(354656048218374155)
 
     paused = True
@@ -190,17 +189,17 @@ async def anime_title_request(message_class):
                                colour=discord.Colour.from_rgb(r=colour_dec_split[0],
                                                               g=colour_dec_split[1],
                                                               b=colour_dec_split[2]))
-    now = datetime.now()
+    now = datetime.now(british_time)
 
     def date_ordinal_letter(day_num: int) -> str:
         if 4 <= day_num <= 20 or 24 <= day_num <= 30:
             return "th"
         else:
             return ["st", "nd", "rd"][int(str(day_num)[-1])-1]
-    brit_day_in = british_time.localize(now).strftime('%d').lstrip("0")
+    brit_day_in = now.strftime('%d').lstrip("0")
     now_brit_day = brit_day_in+date_ordinal_letter(int(brit_day_in))
-    now_brit = british_time.localize(now).strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
-    item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {british_time.localize(now).tzname()}",
+    now_brit = now.strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
+    item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
                           icon_url="https://i.imgur.com/fSPtnoP.png")
     item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
                           url="https://github.com/Pytato/GCHQBot")
@@ -208,7 +207,7 @@ async def anime_title_request(message_class):
     item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
 
     date_format = "%Y-%m-%d"
-    now = datetime.now()
+    now = datetime.utcnow()
 
     start_obj = None
 
