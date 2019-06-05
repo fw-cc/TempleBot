@@ -13,6 +13,7 @@ import math
 import pprint
 import binascii
 import struct
+import pytz
 from datetime import datetime
 from PIL import Image
 import numpy as np
@@ -132,7 +133,6 @@ async def anime_title_request(message_class):
     logger.debug("Making API request.")
     r_obj_raw = await jikanAIO.search(search_type=req_type, query=query_term)
     logger.debug("API Request complete.")
-    reduce_req_counters = asyncio.ensure_future(mal_rate_limit_down_counter())
 
     '''
     # Time to begin packaging the embed for returning to the user.
@@ -141,7 +141,6 @@ async def anime_title_request(message_class):
 
     r_obj = r_obj_raw['results'][0]
     if r_obj['title'] in blocked_mal_search_results:
-        await reduce_req_counters
         return
 
     prepro_img_url = r_obj['image_url'].rsplit("?", 1)[0].rsplit(".", 1)
@@ -172,6 +171,7 @@ async def anime_title_request(message_class):
                 index_max = scipy.argmax(counts)  # find most frequent
                 peak = codes[index_max]
                 embed_colour = binascii.hexlify(bytearray(int(c) for c in peak)).decode('ascii')
+                # ENDS
 
                 im.close()
                 target_image_res.close()
@@ -190,8 +190,20 @@ async def anime_title_request(message_class):
                                colour=discord.Colour.from_rgb(r=colour_dec_split[0],
                                                               g=colour_dec_split[1],
                                                               b=colour_dec_split[2]))
-    item_embed.set_footer(text="Data scraped with JikanPy", icon_url="https://i.imgur.com/fSPtnoP.png")
-    item_embed.set_author(name="GCHQBot", icon_url=bot_avatar_url, url="https://github.com/Pytato/GCHQBot")
+    now = datetime.now()
+
+    def date_ordinal_letter(day_num: int) -> str:
+        if 4 <= day_num <= 20 or 24 <= day_num <= 30:
+            return "th"
+        else:
+            return ["st", "nd", "rd"][int(str(day_num)[-1])-1]
+    brit_day_in = british_time.localize(now).strftime('%d').lstrip("0")
+    now_brit_day = brit_day_in+date_ordinal_letter(int(brit_day_in))
+    now_brit = british_time.localize(now).strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
+    item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {british_time.localize(now).tzname()}",
+                          icon_url="https://i.imgur.com/fSPtnoP.png")
+    item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
+                          url="https://github.com/Pytato/GCHQBot")
     item_embed.set_thumbnail(url=new_img_url)
     item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
 
@@ -225,10 +237,10 @@ async def anime_title_request(message_class):
                                                            f"To: {end}\n"
                                                            f"Status: {release_status}\n"
                                                            f"Episode Count: {r_obj['episodes']}", inline=True)
-        item_embed.add_field(name="OtherDetails:", value=f"Score: {r_obj['score']}\n"
-                                                         f"Age Rating: {r_obj['rated']}\n"
-                                                         f"My Anime List ID: {r_obj['mal_id']}\n"
-                                                         f"Members: "+"{:,}".format(r_obj['members']), inline=True)
+        item_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
+                                                          f"Age Rating: {r_obj['rated']}\n"
+                                                          f"My Anime List ID: {r_obj['mal_id']}\n"
+                                                          f"Members: "+"{:,}".format(r_obj['members']), inline=True)
     else:
         if r_obj['volumes'] == 0:
             r_obj['volumes'] = "?"
@@ -249,29 +261,32 @@ async def anime_title_request(message_class):
                                                                f"To: {end}\n"
                                                                f"Status: {release_status}\n"
                                                                f"Volume Count: {r_obj['volumes']}", inline=True)
-        item_embed.add_field(name="OtherDetails:", value=f"Score: {r_obj['score']}\n"
-                                                         f"Age Rating: {r_obj['rated']}\n"
-                                                         f"My Anime List ID: {r_obj['mal_id']}\n"
-                                                         f"Members: " + "{:,}".format(r_obj['members']), inline=True)
+        item_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
+                                                          f"Age Rating: {r_obj['rated']}\n"
+                                                          f"My Anime List ID: {r_obj['mal_id']}\n"
+                                                          f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
     await weeb_shit_channel.send("", embed=item_embed)
-    await reduce_req_counters
 
 
 @bot.event
 async def on_connect():
     global jikanAIO
+    global british_time
     await bot.change_presence(activity=watching)
     mainloop = asyncio.get_event_loop()
     logger.info("Opening MAL API event loop.")
     jikanAIO = AioJikan(loop=mainloop)
+    british_time = pytz.timezone('Europe/London')
 
 
 @bot.event
 async def on_ready():
     global upvote_emoji_obj
     global downvote_emoji_obj
+    global author_object
     # Any crap that needs to be done on startup can go here.
+    author_object = bot.get_user(103595773379223552)
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
     logger.info("Bot process ready!")
@@ -294,7 +309,11 @@ async def on_message(received_message):
                 (received_message.content[-1] == "}" or received_message.content[-1] == "]")):
             logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
-            await anime_title_request(received_message)
+            async with bot.get_channel(354656048218374155).typing():
+                await anime_title_request(received_message)
+            reduce_req_counters = asyncio.ensure_future(mal_rate_limit_down_counter())
+            await reduce_req_counters
+            return
 
     if received_message.channel.id == 354774298172325893 or received_message.channel.id == 364799469130219521 or \
             received_message.channel.id == 192291925326299137:
