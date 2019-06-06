@@ -177,18 +177,22 @@ async def anime_title_request(message_class):
 
                 colour_hex_split = [embed_colour[0:2], embed_colour[2:4], embed_colour[4:6]]
                 colour_dec_split = []
+                colour_dec_concat = ""
                 for colour in colour_hex_split:
                     colour_dec = int(colour, 16)
                     colour_dec_split.append(colour_dec)
+                    colour_dec_concat += str(colour_dec)
             else:
                 colour_dec_split = [114, 137, 218]  # Discord's "Blurple", in the case that image isn't found
 
     os.remove(f"./tempfile_{r_obj['mal_id']}.jpg")
 
     item_embed = discord.Embed(title=(r_obj['title']+" ["+r_obj['type']+"]"), url=r_obj['url'],
+                               timestamp=discord.Embed.Empty,
                                colour=discord.Colour.from_rgb(r=colour_dec_split[0],
                                                               g=colour_dec_split[1],
                                                               b=colour_dec_split[2]))
+
     now = datetime.now(british_time)
 
     def date_ordinal_letter(day_num: int) -> str:
@@ -199,6 +203,42 @@ async def anime_title_request(message_class):
     brit_day_in = now.strftime('%d').lstrip("0")
     now_brit_day = brit_day_in+date_ordinal_letter(int(brit_day_in))
     now_brit = now.strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
+
+    '''
+    embed_pregen_dict = {
+        "title": r_obj['title']+" ["+r_obj['type']+"]",
+        "url": r_obj['url'],
+        "type": "rich",
+        "timestamp": discord.Embed.Empty,
+        "color": int(colour_dec_concat),
+        "description": discord.Embed.Empty,
+        "footer": {
+            "text": f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
+            "icon_url": "https://i.imgur.com/fSPtnoP.png"
+        },
+        "image": {},
+        "video": {},
+        "provider": {}
+    }'''
+
+    def id_letter(req_form):
+        if req_form == "anime":
+            return "a"
+        else:
+            return "m"
+
+    if r_obj["synopsis"] == "":
+        r_obj["synopsis"] = f"No synopsis information has been added to this title. " \
+                            f"Help improve the MAL database by adding a synopsis " \
+                            f"[here](https://myanimelist.net/dbchanges.php?{id_letter(req_type)}" \
+                            f"id={r_obj['mal_id']}&t=synopsis)."
+
+    # test_from_dict_embed = discord.Embed.from_dict(embed_pregen_dict)
+    # test_from_dict_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
+    #                                url="https://github.com/Pytato/GCHQBot")
+    # test_from_dict_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
+    # test_from_dict_embed.set_thumbnail(url=new_img_url)
+
     item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
                           icon_url="https://i.imgur.com/fSPtnoP.png")
     item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
@@ -207,7 +247,7 @@ async def anime_title_request(message_class):
     item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
 
     date_format = "%Y-%m-%d"
-    now = datetime.utcnow()
+    now = datetime.now()
 
     start_obj = None
 
@@ -231,6 +271,8 @@ async def anime_title_request(message_class):
                 release_status = "Not Yet Airing"
         else:
             release_status = "Finished"
+            if start == "?" or start_obj > now:
+                release_status = "Not Yet Airing"
 
         item_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
                                                            f"To: {end}\n"
@@ -240,6 +282,17 @@ async def anime_title_request(message_class):
                                                           f"Age Rating: {r_obj['rated']}\n"
                                                           f"My Anime List ID: {r_obj['mal_id']}\n"
                                                           f"Members: "+"{:,}".format(r_obj['members']), inline=True)
+        # test_from_dict_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
+        #                                                             f"To: {end}\n"
+        #                                                             f"Status: {release_status}\n"
+        #                                                             f"Episode Count: {r_obj['episodes']}",
+        #                               inline=True)
+        # test_from_dict_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
+        #                                                            f"Age Rating: {r_obj['rated']}\n"
+        #                                                            f"My Anime List ID: {r_obj['mal_id']}\n"
+        #                                                            f"Members: " + "{:,}".format(r_obj['members']),
+        #                               inline=True)
+
     else:
         if r_obj['volumes'] == 0:
             r_obj['volumes'] = "?"
@@ -250,6 +303,8 @@ async def anime_title_request(message_class):
                 release_status = "Not Yet Publishing"
         else:
             release_status = "Finished"
+            if start == "?" or start_obj > now:
+                release_status = "Not Yet Publishing"
 
         try:
             r_obj['rated']
@@ -265,7 +320,8 @@ async def anime_title_request(message_class):
                                                           f"My Anime List ID: {r_obj['mal_id']}\n"
                                                           f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
-    await weeb_shit_channel.send("", embed=item_embed)
+    # await weeb_shit_channel.send(embed=test_from_dict_embed)
+    await weeb_shit_channel.send(embed=item_embed)
 
 
 @bot.event
