@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import sys
 from datetime import datetime
 from datetime import timedelta
@@ -25,42 +26,31 @@ from PIL import Image
 from discord.ext import commands
 from jikanpy import AioJikan
 
-print("Assigning variables...")
-b_token = "MzU0NjM4NTY3NjU1MzQyMDgw.DmNLiQ.Pz3Jh-cioksL5SjXKYXcvWOgXNU"
-autism_score_blue_role_id = 599557127098597406
-cmd_prefix = "!"
 autism_score_format_regex = r"\((\d+|\d\?\d|(\d|\d\.\d+)\²)\/50\)$"
+
+if not os.path.exists("./config/config.json"):
+    shutil.copyfile("./config/default_config.json", "./config/config.json")
+    input("Generated config file in ./config/config.json, edit this before you run the bot again.")
+    exit(0)
+
+print("Assigning variables...")
+with open("./config/config.json", "r") as config_fp:
+    config_file = json.load(config_fp)
+    b_token = config_file["bot"]["token"]
+    owner_id = config_file["bot"]["owner_id"]
+    cmd_prefix = config_file["bot"]["cmd_prefix"]
+    role_dict = config_file["misc"]["role_table"]
+    autism_score_blue_role_id = config_file["misc"]["autism_role_id"]
+    main_announcement_channel_id = config_file
+    protected_role_list = config_file["protected_roles"]
+    blocked_mal_search_results = config_file["blocked_mal_search_results"]
+
 bot = commands.Bot(command_prefix=cmd_prefix)
-owner_id = 103595773379223552
-main_announcement_channel_id = 355070253643988992
-main_guild_id = 354358956732317696
-pres_elect_gchq_id = 354363016776646676
+
 vote_file_in_use = False
 current_mal_req_count_ps = 0
 current_mal_req_count_pm = 0
 vote_file_queue = []
-
-role_dict = {
-    "soton":                   "Houthsampton (Soton)",
-    "uea":                     "UAE (Uni of East Anglia)",
-    "cymru":                   "The Cymru Cooperative (Swansea)",
-    "exeter":                  "Southest Westest WouthSest (Exeter)",
-    "manchester":              "Wildlings 1 (Manchester)",
-    "liverpool":               "Wildlings A (Liverpool)",
-    "leeds":                   "REEEEEEEEEDS (Leeds)",
-    "surrey":                  "Soorreey (Surrey)",
-    "bristol":                 "Brihstool (Bristol)",
-    "weeaboo":                 "🎌Weeaboo🎌",
-    "hearthstone":             "Hearthstone",
-    "purple":                  "Purple",
-    "blue":                    "Blue",
-    "green":                   "Green",
-    "yellow":                  "Yellow",
-    "orange":                  "Orange",
-    "red":                     "Red",
-    "irradiated_green":        "Irradiated Green",
-    "pingable":                "Pingrole"
-}
 
 colour_list = ["purple", "blue", "green", "yellow", "orange", "red", "irradiated_green"]
 
@@ -70,16 +60,7 @@ downvote_id = 536241664768081941
 
 delete_messages_after = 60
 exclusion_range = 100
-protected_role_list = ["❄ Snowflake ❄",
-                       "President Elect of GCHQ",
-                       "Glorious Leaders",
-                       "Vice-President of GCHQ",
-                       "OC Memer",
-                       "Ascended"]
 extra_exclusion_colours = ["2C2F33", "23272A", "99AAB5", "2B2B2B", "212121"]
-blocked_mal_search_results = [
-    "Boku no Pico"
-]
 
 watching = discord.Activity(type=discord.ActivityType.watching, name="you")
 
