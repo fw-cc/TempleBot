@@ -41,7 +41,9 @@ with open("./config/config.json", "r") as config_fp:
     cmd_prefix = config_file["bot"]["cmd_prefix"]
     role_dict = config_file["misc"]["role_table"]
     autism_score_blue_role_id = config_file["misc"]["autism_role_id"]
-    main_announcement_channel_id = config_file
+    main_announcement_channel_id = config_file["misc_ids"]["main_announcement_channel_id"]
+    main_guild_id = config_file["misc_ids"]["main_guild_id"]
+    pres_elect_gchq_id = config_file["misc_ids"]["pres_elect_id"]
     protected_role_list = config_file["protected_roles"]
     blocked_mal_search_results = config_file["blocked_mal_search_results"]
 
@@ -423,8 +425,6 @@ async def _auto_close_active_vote():
         vote_ending_announcement += f"{candidate}: {vote_data['counts'][candidate]}\n"
 
     vote_ending_announcement += "\n"
-
-
 
 
 @bot.event
