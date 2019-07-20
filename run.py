@@ -1,55 +1,66 @@
-import logging
-from discord.ext import commands
-from jikanpy import AioJikan
-import discord
 import asyncio
+import binascii
+import json
+import logging
+import os
+import random
+import re
+import sys
+from datetime import datetime
+from datetime import timedelta
+
 import aiofiles
 import aiohttp
-import os
-import sys
-import json
-import random
+import discord
+import jikanpy.exceptions
+import libneko.aiojson as aiojson
 import math
-import pprint
-import binascii
-import struct
-import pytz
-from datetime import datetime
-from PIL import Image
+import matplotlib.pyplot as plt
 import numpy as np
+import pytz
 import scipy
-import scipy.misc
 import scipy.cluster
+import scipy.misc
+from PIL import Image
+from discord.ext import commands
+from jikanpy import AioJikan
 
 print("Assigning variables...")
-b_token = "Bot token goes here"
+b_token = "MzU0NjM4NTY3NjU1MzQyMDgw.DmNLiQ.Pz3Jh-cioksL5SjXKYXcvWOgXNU"
+autism_score_blue_role_id = 599557127098597406
 cmd_prefix = "!"
+autism_score_format_regex = r"\((\d+|\d\?\d|(\d|\d\.\d+)\²)\/50\)$"
 bot = commands.Bot(command_prefix=cmd_prefix)
-owner_id = 0000000000000000000000
+owner_id = 103595773379223552
+main_announcement_channel_id = 355070253643988992
+main_guild_id = 354358956732317696
+pres_elect_gchq_id = 354363016776646676
 vote_file_in_use = False
 current_mal_req_count_ps = 0
 current_mal_req_count_pm = 0
 vote_file_queue = []
 
-role_dict = {"soton":               "Houthsampton (Soton)",
-             "uea":                 "UAE (Uni of East Anglia)",
-             "cymru":               "The Cymru Cooperative (Swansea)",
-             "exeter":              "Southest Westest WouthSest (Exeter)",
-             "manchester":          "Wildlings 1 (Manchester)",
-             "liverpool":           "Wildlings A (Liverpool)",
-             "leeds":               "REEEEEEEEEDS (Leeds)",
-             "surrey":              "Soorreey (Surrey)",
-             "bristol":             "Brihstool (Bristol)",
-             "weeaboo":             "🎌Weeaboo🎌",
-             "hearthstone":         "Hearthstone",
-             "purple":              "Purple",
-             "blue":                "Blue",
-             "green":               "Green",
-             "yellow":              "Yellow",
-             "orange":              "Orange",
-             "red":                 "Red",
-             "irradiated_green":    "Irradiated Green",
-             "pingable":            "Pingrole"}
+role_dict = {
+    "soton":                   "Houthsampton (Soton)",
+    "uea":                     "UAE (Uni of East Anglia)",
+    "cymru":                   "The Cymru Cooperative (Swansea)",
+    "exeter":                  "Southest Westest WouthSest (Exeter)",
+    "manchester":              "Wildlings 1 (Manchester)",
+    "liverpool":               "Wildlings A (Liverpool)",
+    "leeds":                   "REEEEEEEEEDS (Leeds)",
+    "surrey":                  "Soorreey (Surrey)",
+    "bristol":                 "Brihstool (Bristol)",
+    "weeaboo":                 "🎌Weeaboo🎌",
+    "hearthstone":             "Hearthstone",
+    "purple":                  "Purple",
+    "blue":                    "Blue",
+    "green":                   "Green",
+    "yellow":                  "Yellow",
+    "orange":                  "Orange",
+    "red":                     "Red",
+    "irradiated_green":        "Irradiated Green",
+    "pingable":                "Pingrole"
+}
 
 colour_list = ["purple", "blue", "green", "yellow", "orange", "red", "irradiated_green"]
 
@@ -74,20 +85,55 @@ watching = discord.Activity(type=discord.ActivityType.watching, name="you")
 
 parsed_role_list_text = ""
 for name in role_dict.keys():
-    parsed_role_list_text = parsed_role_list_text+"\n- "+name
+    parsed_role_list_text = parsed_role_list_text + "\n- " + name
 
 if not os.path.exists("./logs/"):
     os.mkdir("./logs/")
     print("Created ./logs/ folder for file based logging.")
 
 
-async def clean_colour_roles(context_guild):
+async def _time_check():
+    """Background deadline/task checking loop that is meant to sit on the main event loop"""
+    global british_timezone
+    while True:
+        british_timezone = pytz.timezone('Europe/London')
+        current_time_obj = datetime.now(tz=pytz.utc)
+        for deadline, task_meta_tuple in glob_deadline_dict.items():
+            if deadline <= current_time_obj:
+                if task_meta_tuple[1]:
+                    await task_meta_tuple[0]()
+                elif not task_meta_tuple[1]:
+                    task_meta_tuple[0]()
+                del glob_deadline_dict[deadline]
+        await asyncio.sleep(30)
+
+
+async def _add_deadline(datetime_obj, task, coro=False, use_file=True):
+    """datetime_obj must be a timezone aware datetime object so it may be internally converted to UTC."""
+    glob_deadline_dict[datetime_obj.timetz(pytz.utc)] = [task, coro]
+    if use_file:
+        with open("./deadlines/deadline.json", "w") as deadline_json:
+            json.dump(glob_deadline_dict, deadline_json, indent=4)
+    logger.info(f"Added {datetime_obj} deadline with action {task.__name__} to execution list.")
+
+
+async def _clean_colour_roles(context_guild):
     await asyncio.sleep(0.5)
     for crole in context_guild.roles:
         if "GCHQ[0x" in crole.name:
             if not crole.members:
                 await crole.delete(reason="Automatic custom colour deletion when unused.")
     logger.info("Cleaned out empty colour roles")
+
+
+async def _generate_blue_role_list(guild):
+    global blue_role_id_list
+
+    blue_role_id_list = []
+
+    for role_obj in guild.roles:
+        if role_obj.colour == discord.Colour.dark_blue():
+            blue_role_id_list.append(role_obj.id)
 
 
 async def mal_rate_limit_down_counter():
@@ -143,7 +189,7 @@ async def anime_title_request(message_class):
         return
 
     prepro_img_url = r_obj['image_url'].rsplit("?", 1)[0].rsplit(".", 1)
-    new_img_url = prepro_img_url[0]+"l."+prepro_img_url[1]
+    new_img_url = prepro_img_url[0] + "l." + prepro_img_url[1]
 
     async with aiohttp.ClientSession() as session:
         async with session.get(new_img_url) as target_image_res:
@@ -187,21 +233,27 @@ async def anime_title_request(message_class):
 
     os.remove(f"./tempfile_{r_obj['mal_id']}.jpg")
 
-    item_embed = discord.Embed(title=(r_obj['title']+" ["+r_obj['type']+"]"), url=r_obj['url'],
+    item_embed = discord.Embed(title=(r_obj['title'] + " [" + r_obj['type'] + "]"), url=r_obj['url'],
                                timestamp=discord.Embed.Empty,
                                colour=discord.Colour.from_rgb(r=colour_dec_split[0],
                                                               g=colour_dec_split[1],
                                                               b=colour_dec_split[2]))
 
-    now = datetime.now(british_time)
+    if req_type == "anime":
+        new_media_obj = await jikanAIO.anime(r_obj["mal_id"])
+    else:
+        new_media_obj = await jikanAIO.manga(r_obj["mal_id"])
+
+    now = datetime.now(british_timezone)
 
     def date_ordinal_letter(day_num: int) -> str:
         if 4 <= day_num <= 20 or 24 <= day_num <= 30:
             return "th"
         else:
-            return ["st", "nd", "rd"][int(str(day_num)[-1])-1]
+            return ["st", "nd", "rd"][int(str(day_num)[-1]) - 1]
+
     brit_day_in = now.strftime('%d').lstrip("0")
-    now_brit_day = brit_day_in+date_ordinal_letter(int(brit_day_in))
+    now_brit_day = brit_day_in + date_ordinal_letter(int(brit_day_in))
     now_brit = now.strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
 
     '''
@@ -229,9 +281,9 @@ async def anime_title_request(message_class):
 
     if r_obj["synopsis"] == "":
         r_obj["synopsis"] = f"No synopsis information has been added to this title. " \
-                            f"Help improve the MAL database by adding a synopsis " \
-                            f"[here](https://myanimelist.net/dbchanges.php?{id_letter(req_type)}" \
-                            f"id={r_obj['mal_id']}&t=synopsis)."
+            f"Help improve the MAL database by adding a synopsis " \
+            f"[here](https://myanimelist.net/dbchanges.php?{id_letter(req_type)}" \
+            f"id={r_obj['mal_id']}&t=synopsis)."
 
     # test_from_dict_embed = discord.Embed.from_dict(embed_pregen_dict)
     # test_from_dict_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
@@ -280,8 +332,8 @@ async def anime_title_request(message_class):
                                                            f"Episode Count: {r_obj['episodes']}", inline=True)
         item_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
                                                           f"Age Rating: {r_obj['rated']}\n"
-                                                          f"My Anime List ID: {r_obj['mal_id']}\n"
-                                                          f"Members: "+"{:,}".format(r_obj['members']), inline=True)
+                                                          f"Studio: {new_media_obj['studios'][0]['name']}\n"
+                                                          f"Members: " + "{:,}".format(r_obj['members']), inline=True)
         # test_from_dict_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
         #                                                             f"To: {end}\n"
         #                                                             f"Status: {release_status}\n"
@@ -324,15 +376,90 @@ async def anime_title_request(message_class):
     await weeb_shit_channel.send(embed=item_embed)
 
 
+async def _test_for_aut_score(member_after, member_before=None):
+    aut_blue_role = member_after.guild.get_role(autism_score_blue_role_id)
+    if member_after.nick is None:
+        return
+    if member_before is not None:
+        # Now we have only got member update events where nicknames have changed. Time to RegEx.
+        if re.search(autism_score_format_regex, str(member_before.nick)) is not None:
+            # Here the user already had an autism score.
+            if re.search(autism_score_format_regex, str(member_after.nick)) is not None:
+                # This is an instance where the user has not removed or added an autism score.
+                return
+            else:
+                # In this case the user has removed their autism score and will lose their blue role.
+                await member_after.remove_roles(aut_blue_role, reason="Member removed autism score from their name.")
+        else:
+            if re.search(autism_score_format_regex, member_after.nick) is not None:
+                # In this case the member has added an autism score to their name so they will get the role.
+                await member_after.add_roles(aut_blue_role, reason="Member added an autism score to their name.")
+                try:
+                    await member_after.send('You have been given the "{}" role for adding an autism score to your '
+                                            'nickname in GCHQ. This role will be automatically removed if you take '
+                                            'your autism score out of your name.'.format(aut_blue_role.name))
+                except discord.errors.Forbidden:
+                    pass
+            else:
+                # Here the user didn't have an autism score and hasn't added one either, nothing needs to be done.
+                return
+    elif member_before is None:
+        # In this case the function is being run from startup, so we just check for people having autism scores.
+        if re.search(autism_score_format_regex, str(member_after.nick)) is not None and (
+                aut_blue_role not in member_after.roles):
+            await member_after.add_roles(aut_blue_role, reason="Member has autism score in name on bot startup.")
+            try:
+                await member_after.send('You have been given the "{}" role for adding an autism score to your nickname '
+                                        'in GCHQ. This role will be automatically removed if you take your autism '
+                                        'score out of your name.'.format(aut_blue_role.name))
+            except discord.errors.Forbidden:
+                pass
+        elif re.search(autism_score_format_regex, str(member_after.nick)) is None and (
+                aut_blue_role in member_after.roles):
+            await member_after.remove_roles(aut_blue_role, reason="Member has no autism score in name on bot startup.")
+
+
+async def _auto_close_active_vote():
+    if not os.path.exists("./active_votes/vote.json"):
+        return "There is no currently active vote."
+
+    async with aiofiles.open("./active_votes/vote.json") as vote_file:
+        vote_data = await aiojson.load(vote_file)
+
+    os.rename("./active_votes/vote.json", "./ended_votes/vote_{}.json".format(
+        datetime.now(british_timezone).strftime("%Y-%m-%d_%H%M%S")))
+
+    vote_fig = plt.figure()
+    vote_bar = plt.barh()
+    sorted_counts = sorted(vote_data["counts"].items(), key=lambda key_val: key_val[1], reverse=True)
+
+    main_guild = await bot.get_guild(main_guild_id)
+
+    vote_ending_announcement = f"__**VOTING FOR THE {main_guild.get_role(pres_elect_gchq_id).mention} HAS NOW " \
+        f"ENDED.**__ \n\n__Final Results:__\n"
+
+    for candidate in sorted_counts:
+        vote_ending_announcement += f"{candidate}: {vote_data['counts'][candidate]}\n"
+
+    vote_ending_announcement += "\n"
+
+
+
+
 @bot.event
 async def on_connect():
     global jikanAIO
-    global british_time
+    global british_timezone
+    global glob_deadline_dict
+    global time_check_task
     await bot.change_presence(activity=watching)
     mainloop = asyncio.get_event_loop()
     logger.info("Opening MAL API event loop.")
     jikanAIO = AioJikan(loop=mainloop)
-    british_time = pytz.timezone('Europe/London')
+    british_timezone = pytz.timezone('Europe/London')
+    glob_deadline_dict = {}
+    time_check_task = asyncio.create_task(_time_check())
+    mainloop.run_until_complete(time_check_task)
 
 
 @bot.event
@@ -344,7 +471,16 @@ async def on_ready():
     author_object = bot.get_user(103595773379223552)
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
-    logger.info("Bot process ready!")
+    logger.info("Bot process ready, running autism score checks and generating deadline tasks.")
+    for member in bot.get_guild(354358956732317696).members:
+        await _test_for_aut_score(member)
+    if not os.path.exists("./deadlines/deadline.json"):
+        with open("./deadlines/deadline.json", "w") as temp_json_create_fp:
+            json.dump({}, temp_json_create_fp)
+    with open("./deadlines/deadline.json", "r") as deadline_json_fp:
+        deadline_json_loaded = json.load(deadline_json_fp)
+    for task_datetime, task_package in deadline_json_loaded.items():
+        await _add_deadline(task_datetime, task_package[0], coro=task_package[1], use_file=False)
     logger.info("Welcome to GCHQ Bot, for all your data harvesting needs.")
 
 
@@ -352,8 +488,13 @@ async def on_ready():
 async def on_message(received_message):
     global current_mal_req_count_pm
     global current_mal_req_count_ps
+    global jikanAIO
     if received_message.channel.id == 357259932472573956:
         # Upvote downvote BS
+        if (re.search(r"[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)",
+                      received_message.content) is None) and \
+                not (received_message.attachments and received_message.embeds):
+            return
         await received_message.add_reaction(upvote_emoji_obj)
         await received_message.add_reaction(downvote_emoji_obj)
         logger.debug("Reacted to message in #memes.")
@@ -365,7 +506,13 @@ async def on_message(received_message):
             logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
             async with bot.get_channel(354656048218374155).typing():
-                await anime_title_request(received_message)
+                try:
+                    await anime_title_request(received_message)
+                except jikanpy.exceptions.APIException:
+                    logger.exception("jikanpy.exceptions.APIException raised, attempting API restart.")
+                    await jikanAIO.close()
+                    jikanAIO = AioJikan(loop=asyncio.get_event_loop())
+                    await anime_title_request(received_message)
             reduce_req_counters = asyncio.ensure_future(mal_rate_limit_down_counter())
             await reduce_req_counters
             return
@@ -376,7 +523,13 @@ async def on_message(received_message):
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
             await asyncio.sleep(0.5)
-            await bot.process_commands(received_message)
+            try:
+                await bot.process_commands(received_message)
+            except commands.PrivateMessageOnly:
+                await received_message.delete()
+                await received_message.author.send(f"The `{received_message.contents}` command "
+                                                   f"should be used in DMs only.")
+                logger.info(f"Deleted command from {received_message.author} intended for DMs.")
         else:
             return
 
@@ -403,6 +556,37 @@ async def on_member_join(member):
     await asyncio.sleep(600)  # The server this bot is used on has a wait period before you can talk.
     await member.add_roles(pingrole_obj, reason="New members automatically get Pingrole")
     logger.info("Successfully messaged and added new user to Pingrole.")
+
+
+@bot.event
+async def on_member_update(member_before, member_after):
+    if member_before.nick == member_after.nick:
+        return
+
+    await _test_for_aut_score(member_after, member_before)
+
+
+@bot.group(name="cog")
+async def cog_grp(ctx):
+    """Cog command group, includes the onload an offload sub-commands, invoking the group directly has no effect."""
+    if ctx.invoked_subcommand is None:
+        logger.info("Command: {0.content} from user {0.author} had no subcommand.".format(ctx.message))
+        await ctx.send("You need to include a subcommand with this one, use `{}help cog` if you need further "
+                       "assistance.".format(cmd_prefix))
+
+
+@cog_grp.command()
+@commands.has_permissions(administrator=True)
+async def load(ctx, cog):
+    """Loads a new cog onto the bot, persists between runs."""
+    pass
+
+
+@cog_grp.command()
+@commands.has_permissions(administrator=True)
+async def unload(ctx, cog):
+    """Unloads a loaded cog from the bot."""
+    pass
 
 
 @bot.group()
@@ -453,7 +637,7 @@ async def get(ctx, req_role=""):
     logger.info('Now attempting to add {} to the role: "{}".'.format(ctx.message.author, role_dict[req_role]))
     await target_user_object.add_roles(target_role_object, reason="Role requested by user")
     logger.info('Addition of {} to role: "{}" completed successfully.'.format(ctx.message.author, role_dict[req_role]))
-    await ctx.send("You have been added to the group: "+role_dict[req_role])
+    await ctx.send("You have been added to the group: " + role_dict[req_role])
 
 
 @role.command()
@@ -476,7 +660,7 @@ async def lose(ctx, req_role=""):
     logger.info('Now attempting to remove {} from the role: "{}".'.format(ctx.message.author, role_dict[req_role]))
     await ctx.author.remove_roles(target_role_object)
     logger.info('Removal of {} from role: "{}" completed successfully.'.format(ctx.message.author, role_dict[req_role]))
-    await ctx.send("You have been removed from the group: "+role_dict[req_role])
+    await ctx.send("You have been removed from the group: " + role_dict[req_role])
 
 
 @role.command(name="list")
@@ -491,6 +675,7 @@ async def stop_process(ctx):
     if ctx.message.author.id == owner_id:
         await ctx.send(":wave:")
         await jikanAIO.close()
+        time_check_task.cancel()
         await bot.logout()
         logger.warning("Bot has now logged out and is shutting down!")
         await asyncio.sleep(5)
@@ -502,11 +687,14 @@ async def stop_process(ctx):
 
 
 @bot.command(pass_context=True)
+@commands.dm_only()
 async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     """Used for special votes configured by bot owner, usage example: !vote_for Freddie Kim_Jong-Un Mao."""
 
     global vote_file_in_use
     global vote_file_queue
+
+    vote_time = datetime.now(british_timezone).strftime("%Y-%m-%d %H:%M:%S")
 
     waiting_message_sent = False
     thread_id = random.randint(1, 10000)
@@ -514,13 +702,26 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     while thread_id in vote_file_queue:
         thread_id = random.randint(1, 10000)
 
-    logging.info("Thread with ID: {} has been opened in a list of length: {}.".format(thread_id, len(vote_file_queue)))
+    await _generate_blue_role_list(ctx.guild)
+
+    author_vote_authorised = False
+    for role_obj in ctx.author.roles:
+        if role_obj.id in blue_role_id_list:
+            author_vote_authorised = True
+            break
+
+    if not author_vote_authorised:
+        await ctx.author.send("You do not have the authorisation to vote. Please contact party leadership to establish "
+                              "why this is the case.")
+        return
 
     if not vote_file_queue:
         vote_file_queue.append(thread_id)
         await asyncio.sleep(0.5)
     else:
         vote_file_queue.append(thread_id)
+
+    logging.debug("Thread with ID: {} has been opened in a list of length: {}.".format(thread_id, len(vote_file_queue)))
 
     while vote_file_queue[0] != thread_id or vote_file_in_use:
         if not waiting_message_sent:
@@ -529,10 +730,16 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
             waiting_message_sent = True
         await asyncio.sleep(0.05)
 
-    logger.info(f"Thread ID: {thread_id}, Thread List: {vote_file_queue}.")
+    logger.debug(f"Thread ID: {thread_id}, Thread List: {vote_file_queue}.")
 
     vote_file_in_use = True
     vote_file_queue.pop(0)
+
+    if vote_ending:
+        await ctx.send("Vote is currently ending, your vote can not be counted.")
+        logger.info("User attempted to vote while the vote was ending.")
+        vote_file_in_use = False
+        return
 
     votes = [first_choice, second_choice, last_choice]
 
@@ -543,19 +750,20 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
         return
 
     if os.path.exists("./active_votes/vote.json"):
-        with open("./active_votes/vote.json", "r") as json_file:
-            vote_data = json.load(json_file)
+        async with aiofiles.open("./active_votes/vote.json", "r") as json_file:
+            vote_data = await aiojson.load(json_file)
     else:
         vote_file_in_use = False
         logger.info("User attempted to vote when there was no vote running.")
+        await ctx.send("There is currently no vote running.")
         return
 
-    have_voted = [*vote_data["votes"]]
-    if ctx.author.name+"#"+ctx.author.discriminator in have_voted:
-        await ctx.send("You have already voted in this election, please do not attempt to vote again.")
-        vote_file_in_use = False
-        logger.info("User attempted to vote twice.")
-        return
+    for user in vote_data["votes"].keys():
+        if ctx.author.id == user[1]:
+            await ctx.send("You have already voted in this election, please do not attempt to vote again.")
+            vote_file_in_use = False
+            logger.info("User attempted to vote twice.")
+            return
 
     valid_vote_targets = []
 
@@ -581,36 +789,75 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
         vote_file_in_use = False
         return
 
-    vote_data["votes"]["{0.name}#{0.discriminator}".format(ctx.author)] = votes
+    vote_data["votes"][["{0.name}#{0.discriminator}".format(ctx.author), ctx.author.id]] = votes
+    vote_data["timestamped_votes"].append({"datetime": vote_time, "user_id": ctx.author.id, "votes": votes})
 
-    with open("./active_votes/vote.json", "w") as json_votes:
-        json.dump(vote_data, json_votes, indent=4)
+    async with aiofiles.open("./active_votes/vote.json", "w") as json_votes:
+        await aiojson.dump(vote_data, json_votes, indent=4)
         logger.info("Dumped vote data into file, opening up for next command.")
 
     vote_file_in_use = False
-    await ctx.send("Your votes have been registered, thank you for partaking in this incredible change to GCHQ's "
-                   "political landscape.")
+    await ctx.send("Your votes have been registered, thank you for being an active member of our democracy.")
 
 
 @bot.command(pass_context=True)
-async def start_vote(ctx, candidate_list=""):
-    if ctx.message.author.id != owner_id:
-        logger.warning("User: {} attempted to run a vote but doesn't have correct permissions!"
-                       .format(ctx.message.author))
+@commands.is_owner()
+async def start_vote(ctx, target_role, time_till_close=24, candidate_list=""):
+    """time_till_close is in hours only"""
+
+    if time_till_close <= 0:
         return
+
     candidate_list = candidate_list.split()
+
+    try:
+        int(candidate_list[0])
+        candidate_ids_in_use = True
+    except ValueError:
+        candidate_ids_in_use = False
 
     logger.info("Successfully finished parsing list of candidates.\n" + str(candidate_list))
 
     announce_message = "Welcome to GCHQ's Government programmed Conditionally Universal National Term vote System! " \
                        "Below will be the valid candidates for you to vote for, below that the voting format and " \
-                       "how to take part in this landmark shift in GCHQ's political landscape.\n\n" \
+                       "how to take part in GCHQ's democratic process.\n\n" \
                        "__Eligible Candidates__:\n"
 
-    for candidate in candidate_list:
-        announce_message = announce_message+candidate+"\n"
+    try:
+        target_role_obj = await discord.ext.commands.RoleConverter().convert(ctx, target_role)
+    except discord.ext.commands.CommandError:
+        logger.exception("Failed to start vote due to improper target role.")
+        return
 
-    logger.info("Successfully completed the candidates listed on the announcement message.")
+    close_datetime = datetime.now(tz=british_timezone) + timedelta(hours=time_till_close)
+
+    vote_storage = {
+        "counts": {},
+        "votes": {},
+        "target_role_id": target_role_obj.id,
+        "timestamped_votes": [],
+        "vote_close_datetime": close_datetime
+    }
+
+    if candidate_ids_in_use:
+        vote_storage["candidate_name_id_tab"] = {}
+        for candidate_id in candidate_list:
+            candidate_obj = await bot.get_user(candidate_id)
+            announce_message += candidate_obj.name + "\n"
+            vote_storage["counts"][candidate_obj.name.lower()] = 0
+            vote_storage["candidate_name_id_tab"][candidate_obj.name] = candidate_id
+    else:
+        for candidate in candidate_list:
+            announce_message += candidate + "\n"
+            vote_storage["counts"][candidate.lower()] = 0
+
+    for candidate_id in candidate_list:
+        candidate_obj = await bot.get_user(candidate_id)
+        announce_message += candidate_obj.name + "\n"
+        vote_storage["counts"][candidate_obj.name.lower()] = 0
+        vote_storage["candidate_name_id_tab"][candidate_obj.name] = candidate_id
+
+    logger.info("Successfully completed the candidates listed on the announcement message and in storage.")
 
     announce_message = announce_message + "\nTo vote, send this command to GCHQBot: " \
                                           "`{0}vote_for <first_choice> <second_choice> <last_choice>`. " \
@@ -621,13 +868,6 @@ async def start_vote(ctx, candidate_list=""):
                                           "as your first choice, Lil' Kimmy as your second and Mao as your last " \
                                           "choice.".format(cmd_prefix)
 
-    vote_storage = {"counts": {}, "votes": {}}
-
-    for candidate in candidate_list:
-        vote_storage["counts"][candidate.lower()] = 0
-
-    logger.info("Set up dictionary for holding vote count information.")
-
     # Now need to handle directories for vote storage under the vote_name
     if not os.path.exists("./active_votes/"):
         os.mkdir("./active_votes/")
@@ -636,19 +876,36 @@ async def start_vote(ctx, candidate_list=""):
         os.mkdir("./ended_votes/")
         logger.info("Generated directory for ended votes.")
 
-    with open("./active_votes/vote.json", mode="w") as json_file:
-        json.dump(vote_storage, json_file, indent=4)
+    async with aiofiles.open("./active_votes/vote.json", mode="w") as json_file:
+        aiojson.dump(vote_storage, json_file, indent=4)
         logger.info("Written JSON file to ./active_votes/vote.json.")
 
-    target_announce_channel = await commands.TextChannelConverter().convert(ctx, "355070253643988992")
+    target_announce_channel = await commands.TextChannelConverter().convert(ctx, str(main_announcement_channel_id))
 
     await target_announce_channel.send(announce_message)
+    await _add_deadline(close_datetime, _auto_close_active_vote, coro=True)
+
+
+@bot.command()
+@commands.is_owner()
+async def end_vote(ctx):
+    """Ends the currently active vote, cba to refactor such that multiple votes can be simultaneously ongoing because
+    I'm lazy. This is a wrapping function that doesn't generally need to be used, set a time on the start_vote instead.
+    """
+    global vote_ending
+
+    vote_ending = True
+    closure_output = await _auto_close_active_vote()
+
+    if closure_output == "There is no currently active vote.":
+        await ctx.send("There is no currently active vote.")
+        return
 
 
 @bot.command(name="colourme")
 async def colour_me(ctx, colour_hex: str):
     """Gives the command invoker a custom colour role if they satisfy given conditions.
-    If colour_hex is given as remove, the bot will remove the colour role and exit the
+    If colour_hex is given as "remove", the bot will remove the colour role and exit the
     operation.
     """
 
@@ -658,7 +915,7 @@ async def colour_me(ctx, colour_hex: str):
             if "GCHQ[0x" in arole.name:
                 await ctx.author.remove_roles(arole, reason="User requested colour role removal.")
 
-        await clean_colour_roles(ctx.guild)
+        await _clean_colour_roles(ctx.guild)
         return
 
     if len(colour_hex) > 6:
@@ -715,7 +972,7 @@ async def colour_me(ctx, colour_hex: str):
             await ctx.send(f"The colour you have selected is too close to that of an admin role or "
                            f"protected colour.\n\nYour colour (decimal): {colour_dec_split} "
                            f"was too close to {cube_center}. \nChange one or more of the components "
-                           f"such that they are {math.ceil(exclusion_range/2)} away from the protected colour.")
+                           f"such that they are {math.ceil(exclusion_range / 2)} away from the protected colour.")
             return
 
     # Not much left to do, only need to create the custom colour role and make sure that it
@@ -757,7 +1014,7 @@ async def colour_me(ctx, colour_hex: str):
 
     await ctx.author.add_roles(new_colour_role, reason="Automatic custom colour allocation by request.")
 
-    await clean_colour_roles(ctx.guild)
+    await _clean_colour_roles(ctx.guild)
 
 
 # Begin logging
@@ -772,5 +1029,19 @@ console_log.setFormatter(formatter)
 logger.addHandler(file_log)
 logger.addHandler(console_log)
 logger.info("Logging configured, running rest of startup.")
+
+if not os.path.exists("./cogs/"):
+    os.mkdir("./cogs/")
+    logger.info("Created ./cogs/ directory.")
+if not os.path.exists("./cogs/loaded/"):
+    os.mkdir("./cogs/loaded/")
+    logger.info("Created ./cogs/loaded/ directory.")
+if not os.mkdir("./cogs/unloaded/"):
+    os.mkdir("./cogs/unloaded/")
+    logger.info("Created ./cogs/unloaded/ directory.")
+if not os.mkdir("./deadlines/"):
+    os.mkdir("./deadlines/")
+    logger.info("Created ./deadlines/ directory.")
+
 logger.info("Starting bot process.")
 bot.run(b_token)
