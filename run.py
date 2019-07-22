@@ -6,6 +6,7 @@ import os
 import random
 import re
 import shutil
+import imageio
 import sys
 from datetime import datetime
 from datetime import timedelta
@@ -14,7 +15,6 @@ import aiofiles
 import aiohttp
 import discord
 import jikanpy.exceptions
-import libneko.aiojson as aiojson
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,17 +34,19 @@ if not os.path.exists("./config/config.json"):
     exit(0)
 
 print("Assigning variables...")
-with open("./config/config.json", "r") as config_fp:
+with open("./config/config.json", "r", encoding="utf-8") as config_fp:
     config_file = json.load(config_fp)
     b_token = config_file["bot"]["token"]
     owner_id = config_file["bot"]["owner_id"]
     cmd_prefix = config_file["bot"]["cmd_prefix"]
-    role_dict = config_file["misc"]["role_table"]
-    autism_score_blue_role_id = config_file["misc"]["autism_role_id"]
+    role_dict = config_file["role_table"]
+    autism_score_blue_role_id = config_file["misc_ids"]["autism_role_id"]
     main_announcement_channel_id = config_file["misc_ids"]["main_announcement_channel_id"]
     main_guild_id = config_file["misc_ids"]["main_guild_id"]
     pres_elect_gchq_id = config_file["misc_ids"]["pres_elect_id"]
-    protected_role_list = config_file["protected_roles"]
+    vice_pres_gchq_id = config_file["misc_ids"]["vice_pres_id"]
+    protected_role_list = config_file["colour_command"]["protected_roles"]
+    extra_exclusion_colours = config_file["colour_command"]["protected_colours"]
     blocked_mal_search_results = config_file["blocked_mal_search_results"]
 
 bot = commands.Bot(command_prefix=cmd_prefix)
@@ -62,7 +64,7 @@ downvote_id = 536241664768081941
 
 delete_messages_after = 60
 exclusion_range = 100
-extra_exclusion_colours = ["2C2F33", "23272A", "99AAB5", "2B2B2B", "212121"]
+# extra_exclusion_colours = ["2C2F33", "23272A", "99AAB5", "2B2B2B", "212121"]
 
 watching = discord.Activity(type=discord.ActivityType.watching, name="you")
 
@@ -79,25 +81,41 @@ async def _time_check():
     """Background deadline/task checking loop that is meant to sit on the main event loop"""
     global british_timezone
     while True:
-        british_timezone = pytz.timezone('Europe/London')
-        current_time_obj = datetime.now(tz=pytz.utc)
-        for deadline, task_meta_tuple in glob_deadline_dict.items():
-            if deadline <= current_time_obj:
-                if task_meta_tuple[1]:
-                    await task_meta_tuple[0]()
-                elif not task_meta_tuple[1]:
-                    task_meta_tuple[0]()
-                del glob_deadline_dict[deadline]
+        try:
+            british_timezone = pytz.timezone('Europe/London')
+            for deadline, task_meta_tuple in glob_deadline_dict.items():
+                if deadline < datetime.now().isoformat():
+                    if task_meta_tuple[1]:
+                        eval(f"asyncio.create_task({task_meta_tuple[0]}())")
+                    elif not task_meta_tuple[1]:
+                        eval(f"{task_meta_tuple[0]}()")
+                    logger.info(f"Finished running task: {task_meta_tuple[0]}, removed from deadline list")
+                    with open("./deadlines/deadline.json", "r+") as deadlines_json:
+                        deadlines_struct = json.load(deadlines_json)
+                    try:
+                        del deadlines_struct[deadline]
+                        with open("./deadlines/deadline.json", "w") as deadlines_json:
+                            json.dump(deadlines_struct, deadlines_json, indent=4)
+                    except KeyError:
+                        pass
+                    del glob_deadline_dict[deadline]
+        except Exception as e:
+            logger.exception(e)
         await asyncio.sleep(30)
 
 
 async def _add_deadline(datetime_obj, task, coro=False, use_file=True):
     """datetime_obj must be a timezone aware datetime object so it may be internally converted to UTC."""
-    glob_deadline_dict[datetime_obj.timetz(pytz.utc)] = [task, coro]
+    try:
+        glob_deadline_dict[datetime_obj.isoformat()] = [task.__name__, coro]
+        logger.info(f"Added {datetime_obj} deadline with action {task.__name__} to execution list.")
+    except AttributeError:
+        glob_deadline_dict[datetime_obj] = [task, coro]
+        logger.info(f"Added {datetime_obj} deadline with action {task} to execution list.")
+
     if use_file:
-        with open("./deadlines/deadline.json", "w") as deadline_json:
+        with open("./deadlines/deadline.json", "w", encoding="utf-8") as deadline_json:
             json.dump(glob_deadline_dict, deadline_json, indent=4)
-    logger.info(f"Added {datetime_obj} deadline with action {task.__name__} to execution list.")
 
 
 async def _clean_colour_roles(context_guild):
@@ -403,28 +421,95 @@ async def _test_for_aut_score(member_after, member_before=None):
 
 
 async def _auto_close_active_vote():
+    global vote_ending
+
     if not os.path.exists("./active_votes/vote.json"):
         return "There is no currently active vote."
 
-    async with aiofiles.open("./active_votes/vote.json") as vote_file:
-        vote_data = await aiojson.load(vote_file)
+    vote_ending = True
 
-    os.rename("./active_votes/vote.json", "./ended_votes/vote_{}.json".format(
-        datetime.now(british_timezone).strftime("%Y-%m-%d_%H%M%S")))
+    with open("./active_votes/vote.json") as vote_file:
+        vote_data = json.load(vote_file)
 
-    vote_fig = plt.figure()
-    vote_bar = plt.barh()
+    now_string = datetime.now(british_timezone).strftime("%Y-%m-%d_%H%M%S")
+
     sorted_counts = sorted(vote_data["counts"].items(), key=lambda key_val: key_val[1], reverse=True)
 
-    main_guild = await bot.get_guild(main_guild_id)
+    main_guild = bot.get_guild(main_guild_id)
+    pres_elect_role_obj = main_guild.get_role(pres_elect_gchq_id)
+    vice_pres_role_obj = main_guild.get_role(vice_pres_gchq_id)
 
-    vote_ending_announcement = f"__**VOTING FOR THE {main_guild.get_role(pres_elect_gchq_id).mention} HAS NOW " \
+    vote_ending_announcement = f"__**VOTING FOR THE {pres_elect_role_obj.mention} HAS NOW " \
         f"ENDED.**__ \n\n__Final Results:__\n"
 
-    for candidate in sorted_counts:
-        vote_ending_announcement += f"{candidate}: {vote_data['counts'][candidate]}\n"
+    sorted_dict = []
+    for candidate, count in sorted_counts:
+        vote_ending_announcement += f"{candidate}: {count}\n"
+        sorted_dict.append([candidate, count])
 
-    vote_ending_announcement += "\n"
+    vote_ending_announcement += f"\nThank you for partaking in this democratic process and congratulate the new " \
+        f"{pres_elect_role_obj.mention}"
+
+    try:
+        # new_pres_elect = bot.get_user(int(vote_data['candidate_name_id_tab'][sorted_dict[0][0].lower()]))
+        new_pres_elect = main_guild.get_member(int(vote_data['candidate_name_id_tab'][sorted_dict[0][0].lower()]))
+        vote_ending_announcement += f": {new_pres_elect.mention}"
+        ids_used = True
+    except KeyError:
+        vote_ending_announcement += "."
+        new_pres_elect = None
+        ids_used = False
+
+    ending_counts = {}
+    for candidate_name in vote_data["counts"].keys():
+        ending_counts[candidate_name] = 0
+
+    if not os.path.exists("./vote_visuals/"):
+        os.mkdir("./vote_visuals/")
+
+    # Here we are essentially running the vote again from scratch to visualise the vote over time
+    def gen_vote_graph(vote_record_obj):
+        ending_counts[vote_record_obj["votes"][0].lower()] += 10
+        ending_counts[vote_record_obj["votes"][1].lower()] += 5
+        ending_counts[vote_record_obj["votes"][2].lower()] -= 5
+        vote_fig, ax = plt.subplots()
+        ax.barh(list(ending_counts.keys()), list(ending_counts.values()), height=0.2, align="edge",
+                color="#004b86", edgecolor="black")
+        ax.set_title(f"{vote_record_obj['datetime']}")
+        ax.set(xlabel="FreddiePoints", ylabel="Candidate")
+        vote_fig.canvas.draw()
+        tmp_plot_img = np.frombuffer(vote_fig.canvas.tostring_rgb(), dtype="uint8")
+        tmp_plot_img = tmp_plot_img.reshape(vote_fig.canvas.get_width_height()[::-1] + (3,))
+        return tmp_plot_img
+
+    kwargs_write = {"fps": 1.0, "quantizer": "nq"}
+
+    imageio.mimsave("./vote_graph.gif",
+                    [gen_vote_graph(vote_record) for vote_record in vote_data["timestamped_votes"]], fps=0.5)
+
+    pres_roles = [pres_elect_role_obj, vice_pres_role_obj]
+    for role_obj in pres_roles:
+        for member in role_obj.members:
+            await member.remove_roles(role_obj, reason="Automated end of term role removal")
+
+    if ids_used:
+        await new_pres_elect.add_roles(pres_elect_role_obj, reason="Automated President Elect Assignment.")
+
+    vote_ending_announcement += '\n\nFive days of mandatory applause have been authorised by the central ' \
+                                'government, please ensure you remain within the guidelines of Article 14.65b.91a ' \
+                                'Part III Section XI of the "Handbook of Citizenship" for the duration, penalties ' \
+                                'associated with failing to meet these simple requirements are detailed in Article ' \
+                                '141.45a.12 Part II Section V List III of the "GCHQ Penal Charter."\n\n'
+
+    main_announcement_channel_obj = bot.get_channel(main_announcement_channel_id)
+
+    await main_announcement_channel_obj.send(vote_ending_announcement, file=discord.File("./vote_graph.gif"))
+
+    shutil.move("./vote_graph.gif", f"./vote_graph_{now_string}.gif")
+
+    os.rename("./active_votes/vote.json", "./ended_votes/vote_{}.json".format(now_string))
+
+    vote_ending = False
 
 
 @bot.event
@@ -440,7 +525,6 @@ async def on_connect():
     british_timezone = pytz.timezone('Europe/London')
     glob_deadline_dict = {}
     time_check_task = asyncio.create_task(_time_check())
-    mainloop.run_until_complete(time_check_task)
 
 
 @bot.event
@@ -453,7 +537,7 @@ async def on_ready():
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
     logger.info("Bot process ready, running autism score checks and generating deadline tasks.")
-    for member in bot.get_guild(354358956732317696).members:
+    for member in bot.get_guild(main_guild_id).members:
         await _test_for_aut_score(member)
     if not os.path.exists("./deadlines/deadline.json"):
         with open("./deadlines/deadline.json", "w") as temp_json_create_fp:
@@ -499,7 +583,8 @@ async def on_message(received_message):
             return
 
     if received_message.channel.id == 354774298172325893 or received_message.channel.id == 364799469130219521 or \
-            received_message.channel.id == 192291925326299137:
+            received_message.channel.id == 192291925326299137 or received_message.channel.id == 602560624542744642 or \
+        received_message.channel.id == 602560399597895693:
         if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
@@ -675,6 +760,8 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     global vote_file_in_use
     global vote_file_queue
 
+    await ctx.trigger_typing()
+
     vote_time = datetime.now(british_timezone).strftime("%Y-%m-%d %H:%M:%S")
 
     waiting_message_sent = False
@@ -683,10 +770,15 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     while thread_id in vote_file_queue:
         thread_id = random.randint(1, 10000)
 
-    await _generate_blue_role_list(ctx.guild)
+    main_guild_obj = bot.get_guild(main_guild_id)
+
+    await _generate_blue_role_list(main_guild_obj)
 
     author_vote_authorised = False
-    for role_obj in ctx.author.roles:
+
+    author_main_guild = main_guild_obj.get_member(ctx.author.id)
+
+    for role_obj in author_main_guild.roles:
         if role_obj.id in blue_role_id_list:
             author_vote_authorised = True
             break
@@ -722,7 +814,7 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
         vote_file_in_use = False
         return
 
-    votes = [first_choice, second_choice, last_choice]
+    votes = [first_choice.lower(), second_choice.lower(), last_choice.lower()]
 
     if votes[0] == votes[1] or votes[1] == votes[2] or votes[2] == votes[0]:
         await ctx.send("You have attempted to vote for the same person more than once.")
@@ -731,8 +823,8 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
         return
 
     if os.path.exists("./active_votes/vote.json"):
-        async with aiofiles.open("./active_votes/vote.json", "r") as json_file:
-            vote_data = await aiojson.load(json_file)
+        with open("./active_votes/vote.json", "r") as json_file:
+            vote_data = json.load(json_file)
     else:
         vote_file_in_use = False
         logger.info("User attempted to vote when there was no vote running.")
@@ -770,11 +862,12 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
         vote_file_in_use = False
         return
 
-    vote_data["votes"][["{0.name}#{0.discriminator}".format(ctx.author), ctx.author.id]] = votes
-    vote_data["timestamped_votes"].append({"datetime": vote_time, "user_id": ctx.author.id, "votes": votes})
+    vote_data["votes"][ctx.author.id] = votes
+    vote_data["timestamped_votes"].append({"datetime": vote_time, "user_id": ctx.author.id, "votes": votes,
+                                           "name": "{0.name}#{0.discriminator}".format(ctx.author)})
 
-    async with aiofiles.open("./active_votes/vote.json", "w") as json_votes:
-        await aiojson.dump(vote_data, json_votes, indent=4)
+    with open("./active_votes/vote.json", "w") as json_votes:
+        json.dump(vote_data, json_votes, indent=4)
         logger.info("Dumped vote data into file, opening up for next command.")
 
     vote_file_in_use = False
@@ -783,8 +876,10 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
 
 @bot.command(pass_context=True)
 @commands.is_owner()
-async def start_vote(ctx, target_role, time_till_close=24, candidate_list=""):
+async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
     """time_till_close is in hours only"""
+
+    time_till_close = int(time_till_close)
 
     if time_till_close <= 0:
         return
@@ -817,26 +912,20 @@ async def start_vote(ctx, target_role, time_till_close=24, candidate_list=""):
         "votes": {},
         "target_role_id": target_role_obj.id,
         "timestamped_votes": [],
-        "vote_close_datetime": close_datetime
+        "vote_close_datetime": close_datetime.isoformat()
     }
 
     if candidate_ids_in_use:
         vote_storage["candidate_name_id_tab"] = {}
         for candidate_id in candidate_list:
-            candidate_obj = await bot.get_user(candidate_id)
+            candidate_obj = bot.get_user(int(candidate_id))
             announce_message += candidate_obj.name + "\n"
             vote_storage["counts"][candidate_obj.name.lower()] = 0
-            vote_storage["candidate_name_id_tab"][candidate_obj.name] = candidate_id
+            vote_storage["candidate_name_id_tab"][candidate_obj.name.lower()] = candidate_id
     else:
         for candidate in candidate_list:
             announce_message += candidate + "\n"
             vote_storage["counts"][candidate.lower()] = 0
-
-    for candidate_id in candidate_list:
-        candidate_obj = await bot.get_user(candidate_id)
-        announce_message += candidate_obj.name + "\n"
-        vote_storage["counts"][candidate_obj.name.lower()] = 0
-        vote_storage["candidate_name_id_tab"][candidate_obj.name] = candidate_id
 
     logger.info("Successfully completed the candidates listed on the announcement message and in storage.")
 
@@ -857,8 +946,8 @@ async def start_vote(ctx, target_role, time_till_close=24, candidate_list=""):
         os.mkdir("./ended_votes/")
         logger.info("Generated directory for ended votes.")
 
-    async with aiofiles.open("./active_votes/vote.json", mode="w") as json_file:
-        aiojson.dump(vote_storage, json_file, indent=4)
+    with open("./active_votes/vote.json", mode="w") as json_file:
+        json.dump(vote_storage, json_file, indent=4)
         logger.info("Written JSON file to ./active_votes/vote.json.")
 
     target_announce_channel = await commands.TextChannelConverter().convert(ctx, str(main_announcement_channel_id))
@@ -880,7 +969,6 @@ async def end_vote(ctx):
 
     if closure_output == "There is no currently active vote.":
         await ctx.send("There is no currently active vote.")
-        return
 
 
 @bot.command(name="colourme")
@@ -1017,12 +1105,13 @@ if not os.path.exists("./cogs/"):
 if not os.path.exists("./cogs/loaded/"):
     os.mkdir("./cogs/loaded/")
     logger.info("Created ./cogs/loaded/ directory.")
-if not os.mkdir("./cogs/unloaded/"):
+if not os.path.exists("./cogs/unloaded/"):
     os.mkdir("./cogs/unloaded/")
     logger.info("Created ./cogs/unloaded/ directory.")
-if not os.mkdir("./deadlines/"):
+if not os.path.exists("./deadlines/"):
     os.mkdir("./deadlines/")
     logger.info("Created ./deadlines/ directory.")
 
 logger.info("Starting bot process.")
+vote_ending = False
 bot.run(b_token)

@@ -8,26 +8,19 @@
 
   "misc_ids": {
     "pres_elect_id": 0,
+    "vice_pres_id": 0,
     "main_guild_id": 0,
     "main_announcement_channel_id": 0,
     "autism_role_id": 0
   },
 
-  "role_table": {
-    "soton":                   "Houthsampton (Soton)",
-    "uea":                     "UAE (Uni of East Anglia)",
-    "cymru":                   "The Cymru Cooperative (Swansea)",
-    "exeter":                  "Southest Westest WouthSest (Exeter)",
-    "manchester":              "Wildlings 1 (Manchester)",
-    "liverpool":               "Wildlings A (Liverpool)",
-    "leeds":                   "REEEEEEEEEDS (Leeds)",
-    "surrey":                  "Soorreey (Surrey)",
-    "bristol":                 "Brihstool (Bristol)",
-    "weeaboo":                 "🎌Weeaboo🎌",
-    "hearthstone":             "Hearthstone",
-    "pingable":                "Pingrole"
+  "role_table": {},
+
+  "colour_command": {
+    "protected_roles": [],
+    "protected_colours": []
   },
 
-  "protected_roles": []
+  "blocked_mal_search_results": []
 
 }
