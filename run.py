@@ -48,6 +48,7 @@ with open("./config/config.json", "r", encoding="utf-8") as config_fp:
     protected_role_list = config_file["colour_command"]["protected_roles"]
     extra_exclusion_colours = config_file["colour_command"]["protected_colours"]
     blocked_mal_search_results = config_file["blocked_mal_search_results"]
+    weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
 
 bot = commands.Bot(command_prefix=cmd_prefix)
 
@@ -162,7 +163,7 @@ async def anime_title_request(message_class):
 
     query_term = message_class.content.strip("{}[]")
 
-    weeb_shit_channel = bot.get_channel(354656048218374155)
+    weeb_shit_channel = bot.get_channel(weeb_channel_id)
 
     paused = True
     while paused:
@@ -229,10 +230,10 @@ async def anime_title_request(message_class):
                     colour_dec = int(colour, 16)
                     colour_dec_split.append(colour_dec)
                     colour_dec_concat += str(colour_dec)
+                found_image = True
             else:
                 colour_dec_split = [114, 137, 218]  # Discord's "Blurple", in the case that image isn't found
-
-    os.remove(f"./tempfile_{r_obj['mal_id']}.jpg")
+                found_image = False
 
     item_embed = discord.Embed(title=(r_obj['title'] + " [" + r_obj['type'] + "]"), url=r_obj['url'],
                                timestamp=discord.Embed.Empty,
@@ -296,7 +297,8 @@ async def anime_title_request(message_class):
                           icon_url="https://i.imgur.com/fSPtnoP.png")
     item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
                           url="https://github.com/Pytato/GCHQBot")
-    item_embed.set_thumbnail(url=new_img_url)
+    if found_image:
+        item_embed.set_thumbnail(url=new_img_url)
     item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
 
     date_format = "%Y-%m-%d"
@@ -331,10 +333,19 @@ async def anime_title_request(message_class):
                                                            f"To: {end}\n"
                                                            f"Status: {release_status}\n"
                                                            f"Episode Count: {r_obj['episodes']}", inline=True)
-        item_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
-                                                          f"Age Rating: {r_obj['rated']}\n"
-                                                          f"Studio: {new_media_obj['studios'][0]['name']}\n"
-                                                          f"Members: " + "{:,}".format(r_obj['members']), inline=True)
+        try:
+            item_embed.add_field(name="Other Details:",
+                                 value=f"Score: {r_obj['score']}\n"
+                                                 f"Age Rating: {r_obj['rated']}\n"
+                                                 f"Studio: {new_media_obj['studios'][0]['name']}\n"
+                                                 f"Members: " + "{:,}".format(r_obj['members']), inline=True)
+        except IndexError:
+            item_embed.add_field(name="Other Details:",
+                                 value=f"Score: {r_obj['score']}\n"
+                                       f"Age Rating: {r_obj['rated']}\n"
+                                       f"Studio: Not Yet Defined\n"
+                                       f"Members: " + "{:,}".format(r_obj['members']), inline=True)
+
         # test_from_dict_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
         #                                                             f"To: {end}\n"
         #                                                             f"Status: {release_status}\n"
@@ -565,12 +576,12 @@ async def on_message(received_message):
         logger.debug("Reacted to message in #memes.")
         return
 
-    if received_message.channel.id == 354656048218374155:
+    if received_message.channel.id == weeb_channel_id:
         if ((received_message.content.startswith("{") or received_message.content.startswith("[")) and
                 (received_message.content[-1] == "}" or received_message.content[-1] == "]")):
             logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
-            async with bot.get_channel(354656048218374155).typing():
+            async with bot.get_channel(weeb_channel_id).typing():
                 try:
                     await anime_title_request(received_message)
                 except jikanpy.exceptions.APIException:
