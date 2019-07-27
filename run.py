@@ -6,7 +6,6 @@ import os
 import random
 import re
 import shutil
-import imageio
 import sys
 from datetime import datetime
 from datetime import timedelta
@@ -16,7 +15,6 @@ import aiohttp
 import discord
 import jikanpy.exceptions
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 import pytz
 import scipy
@@ -26,7 +24,10 @@ from PIL import Image
 from discord.ext import commands
 from jikanpy import AioJikan
 
+from graph_gen import vote_graph
+
 autism_score_format_regex = r"\((\d+|\d\?\d|(\d|\d\.\d+)\²)\/50\)$"
+url_regex = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
 
 if not os.path.exists("./config/config.json"):
     shutil.copyfile("./config/default_config.json", "./config/config.json")
@@ -39,6 +40,7 @@ with open("./config/config.json", "r", encoding="utf-8") as config_fp:
     b_token = config_file["bot"]["token"]
     owner_id = config_file["bot"]["owner_id"]
     cmd_prefix = config_file["bot"]["cmd_prefix"]
+    valid_command_channel_id_list = config_file["bot"]["valid_cmd_channels"]
     role_dict = config_file["role_table"]
     autism_score_blue_role_id = config_file["misc_ids"]["autism_role_id"]
     main_announcement_channel_id = config_file["misc_ids"]["main_announcement_channel_id"]
@@ -49,6 +51,7 @@ with open("./config/config.json", "r", encoding="utf-8") as config_fp:
     extra_exclusion_colours = config_file["colour_command"]["protected_colours"]
     blocked_mal_search_results = config_file["blocked_mal_search_results"]
     weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
+    maymay_channel_id = config_file["misc_ids"]["maymay_channel_id"]
 
 bot = commands.Bot(command_prefix=cmd_prefix)
 
@@ -87,9 +90,9 @@ async def _time_check():
             for deadline, task_meta_tuple in glob_deadline_dict.items():
                 if deadline < datetime.now().isoformat():
                     if task_meta_tuple[1]:
-                        eval(f"asyncio.create_task({task_meta_tuple[0]}())")
+                        eval(f"asyncio.create_task({task_meta_tuple[0]})")
                     elif not task_meta_tuple[1]:
-                        eval(f"{task_meta_tuple[0]}()")
+                        eval(f"{task_meta_tuple[0]}")
                     logger.info(f"Finished running task: {task_meta_tuple[0]}, removed from deadline list")
                     with open("./deadlines/deadline.json", "r+") as deadlines_json:
                         deadlines_struct = json.load(deadlines_json)
@@ -105,11 +108,11 @@ async def _time_check():
         await asyncio.sleep(30)
 
 
-async def _add_deadline(datetime_obj, task, coro=False, use_file=True):
+async def _add_deadline(datetime_obj, task: str, coro=False, use_file=True):
     """datetime_obj must be a timezone aware datetime object so it may be internally converted to UTC."""
     try:
-        glob_deadline_dict[datetime_obj.isoformat()] = [task.__name__, coro]
-        logger.info(f"Added {datetime_obj} deadline with action {task.__name__} to execution list.")
+        glob_deadline_dict[datetime_obj.isoformat()] = [task, coro]
+        logger.info(f"Added {datetime_obj} deadline with action {task} to execution list.")
     except AttributeError:
         glob_deadline_dict[datetime_obj] = [task, coro]
         logger.info(f"Added {datetime_obj} deadline with action {task} to execution list.")
@@ -150,7 +153,7 @@ async def mal_rate_limit_down_counter():
     logger.debug("Reduced per minute count.")
 
 
-async def anime_title_request(message_class):
+async def anime_title_request_func(message_class):
     global current_mal_req_count_pm
     global current_mal_req_count_ps
 
@@ -384,7 +387,6 @@ async def anime_title_request(message_class):
                                                           f"My Anime List ID: {r_obj['mal_id']}\n"
                                                           f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
-    # await weeb_shit_channel.send(embed=test_from_dict_embed)
     await weeb_shit_channel.send(embed=item_embed)
 
 
@@ -478,25 +480,7 @@ async def _auto_close_active_vote():
     if not os.path.exists("./vote_visuals/"):
         os.mkdir("./vote_visuals/")
 
-    # Here we are essentially running the vote again from scratch to visualise the vote over time
-    def gen_vote_graph(vote_record_obj):
-        ending_counts[vote_record_obj["votes"][0].lower()] += 10
-        ending_counts[vote_record_obj["votes"][1].lower()] += 5
-        ending_counts[vote_record_obj["votes"][2].lower()] -= 5
-        vote_fig, ax = plt.subplots()
-        ax.barh(list(ending_counts.keys()), list(ending_counts.values()), height=0.2, align="edge",
-                color="#004b86", edgecolor="black")
-        ax.set_title(f"{vote_record_obj['datetime']}")
-        ax.set(xlabel="FreddiePoints", ylabel="Candidate")
-        vote_fig.canvas.draw()
-        tmp_plot_img = np.frombuffer(vote_fig.canvas.tostring_rgb(), dtype="uint8")
-        tmp_plot_img = tmp_plot_img.reshape(vote_fig.canvas.get_width_height()[::-1] + (3,))
-        return tmp_plot_img
-
-    kwargs_write = {"fps": 1.0, "quantizer": "nq"}
-
-    imageio.mimsave("./vote_graph.gif",
-                    [gen_vote_graph(vote_record) for vote_record in vote_data["timestamped_votes"]], fps=0.5)
+    await vote_graph(vote_data)
 
     pres_roles = [pres_elect_role_obj, vice_pres_role_obj]
     for role_obj in pres_roles:
@@ -508,13 +492,14 @@ async def _auto_close_active_vote():
 
     vote_ending_announcement += '\n\nFive days of mandatory applause have been authorised by the central ' \
                                 'government, please ensure you remain within the guidelines of Article 14.65b.91a ' \
-                                'Part III Section XI of the "Handbook of Citizenship" for the duration, penalties ' \
-                                'associated with failing to meet these simple requirements are detailed in Article ' \
-                                '141.45a.12 Part II Section V List III of the "GCHQ Penal Charter."\n\n'
+                                'of the "Handbook of Citizenship" for the duration, penalties associated with ' \
+                                'failing to meet these simple requirements are detailed in Article 141.45a.12 of ' \
+                                'the "GCHQ Penal Charter."\n\n'
 
     main_announcement_channel_obj = bot.get_channel(main_announcement_channel_id)
 
-    await main_announcement_channel_obj.send(vote_ending_announcement, file=discord.File("./vote_graph.gif"))
+    await main_announcement_channel_obj.send(vote_ending_announcement,
+                                             file=discord.File("./vote_visuals/vote_graph.gif"))
 
     shutil.move("./vote_graph.gif", f"./vote_graph_{now_string}.gif")
 
@@ -544,7 +529,7 @@ async def on_ready():
     global downvote_emoji_obj
     global author_object
     # Any crap that needs to be done on startup can go here.
-    author_object = bot.get_user(103595773379223552)
+    author_object = bot.get_user(owner_id)
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
     logger.info("Bot process ready, running autism score checks and generating deadline tasks.")
@@ -565,41 +550,38 @@ async def on_message(received_message):
     global current_mal_req_count_pm
     global current_mal_req_count_ps
     global jikanAIO
-    if received_message.channel.id == 357259932472573956:
+
+    if received_message.channel.id == maymay_channel_id:
         # Upvote downvote BS
-        if (re.search(r"[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)",
-                      received_message.content) is None) and \
-                not (received_message.attachments and received_message.embeds):
-            return
-        await received_message.add_reaction(upvote_emoji_obj)
-        await received_message.add_reaction(downvote_emoji_obj)
-        logger.debug("Reacted to message in #memes.")
+        if (re.search(url_regex, received_message.content) is not None) or \
+                received_message.attachments or received_message.embeds:
+            await received_message.add_reaction(upvote_emoji_obj)
+            await received_message.add_reaction(downvote_emoji_obj)
+            logger.debug("Reacted to message in #memes.")
         return
 
     if received_message.channel.id == weeb_channel_id:
-        if ((received_message.content.startswith("{") or received_message.content.startswith("[")) and
-                (received_message.content[-1] == "}" or received_message.content[-1] == "]")):
+        if ((received_message.content.startswith("{") and received_message.content[-1] == "}") or
+                (received_message.content.startswith("[") and received_message.content[-1] == "]")):
             logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
             async with bot.get_channel(weeb_channel_id).typing():
                 try:
-                    await anime_title_request(received_message)
+                    # await bot.get_channel(weeb_channel_id).send(embed=anime_title_request(received_message))
+                    await anime_title_request_func(received_message)
                 except jikanpy.exceptions.APIException:
                     logger.exception("jikanpy.exceptions.APIException raised, attempting API restart.")
                     await jikanAIO.close()
                     jikanAIO = AioJikan(loop=asyncio.get_event_loop())
-                    await anime_title_request(received_message)
-            reduce_req_counters = asyncio.ensure_future(mal_rate_limit_down_counter())
-            await reduce_req_counters
+                    # await bot.get_channel(weeb_channel_id).send(embed=anime_title_request(received_message))
+                    await anime_title_request_func(received_message)
+            asyncio.create_task(mal_rate_limit_down_counter())
             return
 
-    if received_message.channel.id == 354774298172325893 or received_message.channel.id == 364799469130219521 or \
-            received_message.channel.id == 192291925326299137 or received_message.channel.id == 602560624542744642 or \
-        received_message.channel.id == 602560399597895693:
+    if received_message.channel.id in valid_command_channel_id_list:
         if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
-            await asyncio.sleep(0.5)
             try:
                 await bot.process_commands(received_message)
             except commands.PrivateMessageOnly:
@@ -613,7 +595,6 @@ async def on_message(received_message):
     elif received_message.guild is None:  # Indicates a private message
         if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}".'.format(received_message))
-            await asyncio.sleep(0.5)
             await bot.process_commands(received_message)
 
     else:
@@ -766,14 +747,17 @@ async def stop_process(ctx):
 @bot.command(pass_context=True)
 @commands.dm_only()
 async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
-    """Used for special votes configured by bot owner, usage example: !vote_for Freddie Kim_Jong-Un Mao."""
+    """Used for special votes configured by bot owner, usage example: !vote_for Freddie Kim_Jong-Un Mao.
+
+    DM only command.
+    """
 
     global vote_file_in_use
     global vote_file_queue
 
     await ctx.trigger_typing()
 
-    vote_time = datetime.now(british_timezone).strftime("%Y-%m-%d %H:%M:%S")
+    vote_time = datetime.now(british_timezone).isoformat()
 
     waiting_message_sent = False
     thread_id = random.randint(1, 10000)
@@ -916,13 +900,16 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
         logger.exception("Failed to start vote due to improper target role.")
         return
 
-    close_datetime = datetime.now(tz=british_timezone) + timedelta(hours=time_till_close)
+    start_datetime = datetime.now(tz=british_timezone)
+
+    close_datetime = start_datetime + timedelta(hours=time_till_close)
 
     vote_storage = {
         "counts": {},
         "votes": {},
         "target_role_id": target_role_obj.id,
         "timestamped_votes": [],
+        "vote_start_datetime": start_datetime.isoformat(),
         "vote_close_datetime": close_datetime.isoformat()
     }
 
@@ -964,7 +951,7 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
     target_announce_channel = await commands.TextChannelConverter().convert(ctx, str(main_announcement_channel_id))
 
     await target_announce_channel.send(announce_message)
-    await _add_deadline(close_datetime, _auto_close_active_vote, coro=True)
+    await _add_deadline(close_datetime, "_auto_close_active_vote()", coro=True)
 
 
 @bot.command()
