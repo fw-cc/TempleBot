@@ -1,26 +1,30 @@
 {
 
-  "bot": {
-    "token": "",
-    "owner_id": 0,
-    "cmd_prefix": "!"
-  },
+    "bot": {
+        "token": "",
+        "owner_id": 0,
+        "cmd_prefix": "!",
+        "valid_cmd_channels": [
+            0
+        ]
+    },
 
-  "misc_ids": {
-    "pres_elect_id": 0,
-    "vice_pres_id": 0,
-    "main_guild_id": 0,
-    "main_announcement_channel_id": 0,
-    "autism_role_id": 0
-  },
+    "misc_ids": {
+        "pres_elect_id": 0,
+        "vice_pres_id": 0,
+        "main_guild_id": 0,
+        "main_announcement_channel_id": 0,
+        "autism_role_id": 0,
+        "maymay_channel_id": 0
+    },
 
-  "role_table": {},
+    "role_table": {},
 
-  "colour_command": {
-    "protected_roles": [],
-    "protected_colours": []
-  },
+    "colour_command": {
+        "protected_roles": [],
+        "protected_colours": []
+    },
 
-  "blocked_mal_search_results": []
+    "blocked_mal_search_results": []
 
 }
