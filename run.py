@@ -1,6 +1,4 @@
 import asyncio
-import binascii
-import json
 import logging
 import os
 import random
@@ -10,75 +8,13 @@ import sys
 from datetime import datetime
 from datetime import timedelta
 
-import aiofiles
-import aiohttp
 import discord
-import jikanpy.exceptions
 import math
-import numpy as np
+import json
 import pytz
-import scipy
-import scipy.cluster
-import scipy.misc
-from PIL import Image
 from discord.ext import commands
-from jikanpy import AioJikan
 
-from graph_gen import vote_graph
-
-autism_score_format_regex = r"\((\d+|\d\?\d|(\d|\d\.\d+)\²)\/50\)$"
-url_regex = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
-
-if not os.path.exists("./config/config.json"):
-    shutil.copyfile("./config/default_config.json", "./config/config.json")
-    input("Generated config file in ./config/config.json, edit this before you run the bot again.")
-    exit(0)
-
-print("Assigning variables...")
-with open("./config/config.json", "r", encoding="utf-8") as config_fp:
-    config_file = json.load(config_fp)
-    b_token = config_file["bot"]["token"]
-    owner_id = config_file["bot"]["owner_id"]
-    cmd_prefix = config_file["bot"]["cmd_prefix"]
-    valid_command_channel_id_list = config_file["bot"]["valid_cmd_channels"]
-    role_dict = config_file["role_table"]
-    autism_score_blue_role_id = config_file["misc_ids"]["autism_role_id"]
-    main_announcement_channel_id = config_file["misc_ids"]["main_announcement_channel_id"]
-    main_guild_id = config_file["misc_ids"]["main_guild_id"]
-    pres_elect_gchq_id = config_file["misc_ids"]["pres_elect_id"]
-    vice_pres_gchq_id = config_file["misc_ids"]["vice_pres_id"]
-    protected_role_list = config_file["colour_command"]["protected_roles"]
-    extra_exclusion_colours = config_file["colour_command"]["protected_colours"]
-    blocked_mal_search_results = config_file["blocked_mal_search_results"]
-    weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
-    maymay_channel_id = config_file["misc_ids"]["maymay_channel_id"]
-
-bot = commands.Bot(command_prefix=cmd_prefix)
-
-vote_file_in_use = False
-current_mal_req_count_ps = 0
-current_mal_req_count_pm = 0
-vote_file_queue = []
-
-colour_list = ["purple", "blue", "green", "yellow", "orange", "red", "irradiated_green"]
-
-background_emoji_server_id = 192291925326299137
-upvote_id = 536241661286547456
-downvote_id = 536241664768081941
-
-delete_messages_after = 60
-exclusion_range = 100
-# extra_exclusion_colours = ["2C2F33", "23272A", "99AAB5", "2B2B2B", "212121"]
-
-watching = discord.Activity(type=discord.ActivityType.watching, name="you")
-
-parsed_role_list_text = ""
-for name in role_dict.keys():
-    parsed_role_list_text = parsed_role_list_text + "\n- " + name
-
-if not os.path.exists("./logs/"):
-    os.mkdir("./logs/")
-    print("Created ./logs/ folder for file based logging.")
+bot = commands.Bot(command_prefix="placeholder")
 
 
 async def _time_check():
@@ -141,257 +77,8 @@ async def _generate_blue_role_list(guild):
             blue_role_id_list.append(role_obj.id)
 
 
-async def mal_rate_limit_down_counter():
-    global current_mal_req_count_pm
-    global current_mal_req_count_ps
-
-    await asyncio.sleep(2)
-    current_mal_req_count_ps -= 1
-    logger.debug("Reduced per second count.")
-    await asyncio.sleep(58)
-    current_mal_req_count_pm -= 1
-    logger.debug("Reduced per minute count.")
-
-
-async def anime_title_request_func(message_class):
-    global current_mal_req_count_pm
-    global current_mal_req_count_ps
-
-    if message_class.content.startswith("["):
-        req_type = "manga"
-    elif message_class.content.startswith("{"):
-        req_type = "anime"
-    else:
-        return None
-
-    query_term = message_class.content.strip("{}[]")
-
-    weeb_shit_channel = bot.get_channel(weeb_channel_id)
-
-    paused = True
-    while paused:
-        if current_mal_req_count_pm >= 30:
-            await asyncio.sleep(current_mal_req_count_pm - 30)
-        elif current_mal_req_count_ps >= 2:
-            await asyncio.sleep(1)
-        else:
-            paused = False
-
-    current_mal_req_count_pm += 1
-    current_mal_req_count_ps += 1
-
-    logger.debug("Making API request.")
-    r_obj_raw = await jikanAIO.search(search_type=req_type, query=query_term)
-    logger.debug("API Request complete.")
-
-    '''
-    # Time to begin packaging the embed for returning to the user.
-    pprint.pprint(r_obj_raw["results"][0])
-    '''
-
-    r_obj = r_obj_raw['results'][0]
-    if r_obj['title'] in blocked_mal_search_results:
-        return
-
-    prepro_img_url = r_obj['image_url'].rsplit("?", 1)[0].rsplit(".", 1)
-    new_img_url = prepro_img_url[0] + "l." + prepro_img_url[1]
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(new_img_url) as target_image_res:
-            if target_image_res.status == 200:
-                temp_file = await aiofiles.open(f"./tempfile_{r_obj['mal_id']}.jpg", mode="wb")
-                await temp_file.write(await target_image_res.read())
-                await temp_file.close()
-
-                # CODE HERE USED FOR FINDING DOMINANT COLOUR, by Stack Overflow user: Peter Hansen
-                # https://stackoverflow.com/questions/3241929/python-find-dominant-most-common-color-in-an-image
-                num_clusters = 5
-                im = Image.open(f"./tempfile_{r_obj['mal_id']}.jpg")
-                im = im.resize((150, 210))  # optional, to reduce time
-                ar = np.asarray(im)
-                shape = ar.shape
-                ar = ar.reshape(scipy.product(shape[:2]), shape[2]).astype(float)
-
-                logger.debug('finding clusters')
-                codes, dist = scipy.cluster.vq.kmeans(ar, num_clusters)
-
-                vecs, dist = scipy.cluster.vq.vq(ar, codes)  # assign codes
-                counts, bins = scipy.histogram(vecs, len(codes))  # count occurrences
-
-                index_max = scipy.argmax(counts)  # find most frequent
-                peak = codes[index_max]
-                embed_colour = binascii.hexlify(bytearray(int(c) for c in peak)).decode('ascii')
-                # ENDS
-
-                im.close()
-                target_image_res.close()
-
-                colour_hex_split = [embed_colour[0:2], embed_colour[2:4], embed_colour[4:6]]
-                colour_dec_split = []
-                colour_dec_concat = ""
-                for colour in colour_hex_split:
-                    colour_dec = int(colour, 16)
-                    colour_dec_split.append(colour_dec)
-                    colour_dec_concat += str(colour_dec)
-                found_image = True
-            else:
-                colour_dec_split = [114, 137, 218]  # Discord's "Blurple", in the case that image isn't found
-                found_image = False
-
-    item_embed = discord.Embed(title=(r_obj['title'] + " [" + r_obj['type'] + "]"), url=r_obj['url'],
-                               timestamp=discord.Embed.Empty,
-                               colour=discord.Colour.from_rgb(r=colour_dec_split[0],
-                                                              g=colour_dec_split[1],
-                                                              b=colour_dec_split[2]))
-
-    if req_type == "anime":
-        new_media_obj = await jikanAIO.anime(r_obj["mal_id"])
-    else:
-        new_media_obj = await jikanAIO.manga(r_obj["mal_id"])
-
-    now = datetime.now(british_timezone)
-
-    def date_ordinal_letter(day_num: int) -> str:
-        if 4 <= day_num <= 20 or 24 <= day_num <= 30:
-            return "th"
-        else:
-            return ["st", "nd", "rd"][int(str(day_num)[-1]) - 1]
-
-    brit_day_in = now.strftime('%d').lstrip("0")
-    now_brit_day = brit_day_in + date_ordinal_letter(int(brit_day_in))
-    now_brit = now.strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
-
-    '''
-    embed_pregen_dict = {
-        "title": r_obj['title']+" ["+r_obj['type']+"]",
-        "url": r_obj['url'],
-        "type": "rich",
-        "timestamp": discord.Embed.Empty,
-        "color": int(colour_dec_concat),
-        "description": discord.Embed.Empty,
-        "footer": {
-            "text": f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
-            "icon_url": "https://i.imgur.com/fSPtnoP.png"
-        },
-        "image": {},
-        "video": {},
-        "provider": {}
-    }'''
-
-    def id_letter(req_form):
-        if req_form == "anime":
-            return "a"
-        else:
-            return "m"
-
-    if r_obj["synopsis"] == "":
-        r_obj["synopsis"] = f"No synopsis information has been added to this title. " \
-            f"Help improve the MAL database by adding a synopsis " \
-            f"[here](https://myanimelist.net/dbchanges.php?{id_letter(req_type)}" \
-            f"id={r_obj['mal_id']}&t=synopsis)."
-
-    # test_from_dict_embed = discord.Embed.from_dict(embed_pregen_dict)
-    # test_from_dict_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
-    #                                url="https://github.com/Pytato/GCHQBot")
-    # test_from_dict_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
-    # test_from_dict_embed.set_thumbnail(url=new_img_url)
-
-    item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
-                          icon_url="https://i.imgur.com/fSPtnoP.png")
-    item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
-                          url="https://github.com/Pytato/GCHQBot")
-    if found_image:
-        item_embed.set_thumbnail(url=new_img_url)
-    item_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
-
-    date_format = "%Y-%m-%d"
-    now = datetime.now()
-
-    start_obj = None
-
-    if r_obj['end_date'] is None:
-        end = "?"
-    else:
-        end = r_obj['end_date'].split("T")[0]
-    if r_obj['start_date'] is None:
-        start = "?"
-    else:
-        start = r_obj['start_date'].split("T")[0]
-        start_obj = datetime.strptime(start, date_format)
-
-    if req_type == "anime":
-        if r_obj['episodes'] == 0:
-            r_obj['episodes'] = "?"
-
-        if r_obj['airing']:
-            release_status = "Airing"
-            if start_obj > now and start != "?":
-                release_status = "Not Yet Airing"
-        else:
-            release_status = "Finished"
-            if start == "?" or start_obj > now:
-                release_status = "Not Yet Airing"
-
-        item_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
-                                                           f"To: {end}\n"
-                                                           f"Status: {release_status}\n"
-                                                           f"Episode Count: {r_obj['episodes']}", inline=True)
-        try:
-            item_embed.add_field(name="Other Details:",
-                                 value=f"Score: {r_obj['score']}\n"
-                                                 f"Age Rating: {r_obj['rated']}\n"
-                                                 f"Studio: {new_media_obj['studios'][0]['name']}\n"
-                                                 f"Members: " + "{:,}".format(r_obj['members']), inline=True)
-        except IndexError:
-            item_embed.add_field(name="Other Details:",
-                                 value=f"Score: {r_obj['score']}\n"
-                                       f"Age Rating: {r_obj['rated']}\n"
-                                       f"Studio: Not Yet Defined\n"
-                                       f"Members: " + "{:,}".format(r_obj['members']), inline=True)
-
-        # test_from_dict_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
-        #                                                             f"To: {end}\n"
-        #                                                             f"Status: {release_status}\n"
-        #                                                             f"Episode Count: {r_obj['episodes']}",
-        #                               inline=True)
-        # test_from_dict_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
-        #                                                            f"Age Rating: {r_obj['rated']}\n"
-        #                                                            f"My Anime List ID: {r_obj['mal_id']}\n"
-        #                                                            f"Members: " + "{:,}".format(r_obj['members']),
-        #                               inline=True)
-
-    else:
-        if r_obj['volumes'] == 0:
-            r_obj['volumes'] = "?"
-
-        if r_obj['publishing']:
-            release_status = "Publishing"
-            if start_obj > now and start != "?":
-                release_status = "Not Yet Publishing"
-        else:
-            release_status = "Finished"
-            if start == "?" or start_obj > now:
-                release_status = "Not Yet Publishing"
-
-        try:
-            r_obj['rated']
-        except KeyError:
-            r_obj['rated'] = "No Rating"
-
-        item_embed.add_field(name="Publishing Details:", value=f"From: {start}\n"
-                                                               f"To: {end}\n"
-                                                               f"Status: {release_status}\n"
-                                                               f"Volume Count: {r_obj['volumes']}", inline=True)
-        item_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
-                                                          f"Age Rating: {r_obj['rated']}\n"
-                                                          f"My Anime List ID: {r_obj['mal_id']}\n"
-                                                          f"Members: " + "{:,}".format(r_obj['members']), inline=True)
-
-    await weeb_shit_channel.send(embed=item_embed)
-
-
 async def _test_for_aut_score(member_after, member_before=None):
-    aut_blue_role = member_after.guild.get_role(autism_score_blue_role_id)
+    aut_blue_role = member_after.guild.get_role(config_var.autism_score_blue_role_id)
     if member_after.nick is None:
         return
     if member_before is not None:
@@ -448,9 +135,9 @@ async def _auto_close_active_vote():
 
     sorted_counts = sorted(vote_data["counts"].items(), key=lambda key_val: key_val[1], reverse=True)
 
-    main_guild = bot.get_guild(main_guild_id)
-    pres_elect_role_obj = main_guild.get_role(pres_elect_gchq_id)
-    vice_pres_role_obj = main_guild.get_role(vice_pres_gchq_id)
+    main_guild = bot.get_guild(config_var.main_guild_id)
+    pres_elect_role_obj = main_guild.get_role(config_var.pres_elect_gchq_id)
+    vice_pres_role_obj = main_guild.get_role(config_var.vice_pres_gchq_id)
 
     vote_ending_announcement = f"__**VOTING FOR THE {pres_elect_role_obj.mention} HAS NOW " \
         f"ENDED.**__ \n\n__Final Results:__\n"
@@ -496,7 +183,7 @@ async def _auto_close_active_vote():
                                 'failing to meet these simple requirements are detailed in Article 141.45a.12 of ' \
                                 'the "GCHQ Penal Charter."\n\n'
 
-    main_announcement_channel_obj = bot.get_channel(main_announcement_channel_id)
+    main_announcement_channel_obj = bot.get_channel(config_var.main_announcement_channel_id)
 
     await main_announcement_channel_obj.send(vote_ending_announcement,
                                              file=discord.File("./vote_visuals/vote_graph.gif"))
@@ -510,14 +197,10 @@ async def _auto_close_active_vote():
 
 @bot.event
 async def on_connect():
-    global jikanAIO
     global british_timezone
     global glob_deadline_dict
     global time_check_task
     await bot.change_presence(activity=watching)
-    mainloop = asyncio.get_event_loop()
-    logger.info("Opening MAL API event loop.")
-    jikanAIO = AioJikan(loop=mainloop)
     british_timezone = pytz.timezone('Europe/London')
     glob_deadline_dict = {}
     time_check_task = asyncio.create_task(_time_check())
@@ -528,12 +211,13 @@ async def on_ready():
     global upvote_emoji_obj
     global downvote_emoji_obj
     global author_object
+
     # Any crap that needs to be done on startup can go here.
-    author_object = bot.get_user(owner_id)
+    author_object = bot.get_user(config_var.owner_id)
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
     logger.info("Bot process ready, running autism score checks and generating deadline tasks.")
-    for member in bot.get_guild(main_guild_id).members:
+    for member in bot.get_guild(config_var.main_guild_id).members:
         await _test_for_aut_score(member)
     if not os.path.exists("./deadlines/deadline.json"):
         with open("./deadlines/deadline.json", "w") as temp_json_create_fp:
@@ -549,37 +233,26 @@ async def on_ready():
 async def on_message(received_message):
     global current_mal_req_count_pm
     global current_mal_req_count_ps
-    global jikanAIO
 
-    if received_message.channel.id == maymay_channel_id:
+    if received_message.channel.id == config_var.maymay_channel_id:
         # Upvote downvote BS
         if (re.search(url_regex, received_message.content) is not None) or \
                 received_message.attachments or received_message.embeds:
             await received_message.add_reaction(upvote_emoji_obj)
             await received_message.add_reaction(downvote_emoji_obj)
-            logger.debug("Reacted to message in #memes.")
         return
 
-    if received_message.channel.id == weeb_channel_id:
+    if received_message.channel.id == config_var.weeb_channel_id:
         if ((received_message.content.startswith("{") and received_message.content[-1] == "}") or
                 (received_message.content.startswith("[") and received_message.content[-1] == "]")):
             logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
-            async with bot.get_channel(weeb_channel_id).typing():
-                try:
-                    # await bot.get_channel(weeb_channel_id).send(embed=anime_title_request(received_message))
-                    await anime_title_request_func(received_message)
-                except jikanpy.exceptions.APIException:
-                    logger.exception("jikanpy.exceptions.APIException raised, attempting API restart.")
-                    await jikanAIO.close()
-                    jikanAIO = AioJikan(loop=asyncio.get_event_loop())
-                    # await bot.get_channel(weeb_channel_id).send(embed=anime_title_request(received_message))
-                    await anime_title_request_func(received_message)
-            asyncio.create_task(mal_rate_limit_down_counter())
+            received_message.content = config_var.cmd_prefix+"weeb_search "+received_message.content
+            await bot.process_commands(received_message)
             return
 
-    if received_message.channel.id in valid_command_channel_id_list:
-        if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
+    if received_message.channel.id in config_var.valid_command_channel_id_list:
+        if received_message.content.startswith(config_var.cmd_prefix) and received_message.author != bot.user:
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
                         .format(received_message))
             try:
@@ -593,7 +266,7 @@ async def on_message(received_message):
             return
 
     elif received_message.guild is None:  # Indicates a private message
-        if received_message.content.startswith(cmd_prefix) and received_message.author != bot.user:
+        if received_message.content.startswith(config_var.cmd_prefix) and received_message.author != bot.user:
             logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}".'.format(received_message))
             await bot.process_commands(received_message)
 
@@ -609,7 +282,7 @@ async def on_member_join(member):
                       '\n\nTo see how role based commands work use: `{0}help role`.\n\n'
                       'It is also **STRONGLY RECOMMENDED** that you read #welcome to find out about the DBAC ruleset '
                       'and the Constitution of GCHQ.'
-                      .format(cmd_prefix))
+                      .format(config_var.cmd_prefix))
     pingrole_obj = discord.utils.get(member.guild.roles, name="Pingrole")
     await asyncio.sleep(600)  # The server this bot is used on has a wait period before you can talk.
     await member.add_roles(pingrole_obj, reason="New members automatically get Pingrole")
@@ -630,7 +303,7 @@ async def cog_grp(ctx):
     if ctx.invoked_subcommand is None:
         logger.info("Command: {0.content} from user {0.author} had no subcommand.".format(ctx.message))
         await ctx.send("You need to include a subcommand with this one, use `{}help cog` if you need further "
-                       "assistance.".format(cmd_prefix))
+                       "assistance.".format(config_var.cmd_prefix))
 
 
 @cog_grp.command()
@@ -653,7 +326,7 @@ async def role(ctx):
     if ctx.invoked_subcommand is None:
         logger.info("Command: {0.content} from user {0.author} had no subcommand.".format(ctx.message))
         await ctx.send("You need to include a subcommand with this one, use `{}help role` if you need further "
-                       "assistance.".format(cmd_prefix))
+                       "assistance.".format(config_var.cmd_prefix))
 
 
 @role.command()
@@ -663,12 +336,12 @@ async def get(ctx, req_role=""):
         req_role = req_role.lower()
     except TypeError:
         pass
-    if req_role not in role_dict.keys():
+    if req_role not in config_var.role_dict.keys():
         await ctx.send("You need to include a valid role id in this subcommand, use `{}role list` to see them."
-                       .format(cmd_prefix))
+                       .format(config_var.cmd_prefix))
         return
 
-    target_role_object = await commands.RoleConverter().convert(ctx, role_dict[req_role])
+    target_role_object = await commands.RoleConverter().convert(ctx, config_var.role_dict[req_role])
     target_user_object = ctx.author
 
     if req_role in colour_list:
@@ -689,13 +362,15 @@ async def get(ctx, req_role=""):
 
     if target_role_object in target_user_object.roles:
         await ctx.send("You already have the requested role, to remove a role use: `{}role lose <role>`."
-                       .format(cmd_prefix))
+                       .format(config_var.cmd_prefix))
         return
 
-    logger.info('Now attempting to add {} to the role: "{}".'.format(ctx.message.author, role_dict[req_role]))
+    logger.info('Now attempting to add {} to the role: "{}".'.format(
+        ctx.message.author, config_var.role_dict[req_role]))
     await target_user_object.add_roles(target_role_object, reason="Role requested by user")
-    logger.info('Addition of {} to role: "{}" completed successfully.'.format(ctx.message.author, role_dict[req_role]))
-    await ctx.send("You have been added to the group: " + role_dict[req_role])
+    logger.info('Addition of {} to role: "{}" completed successfully.'.format(
+        ctx.message.author, config_var.role_dict[req_role]))
+    await ctx.send("You have been added to the group: " + config_var.role_dict[req_role])
 
 
 @role.command()
@@ -705,34 +380,36 @@ async def lose(ctx, req_role=""):
         req_role = req_role.lower()
     except TypeError:
         pass
-    if req_role not in role_dict.keys():
+    if req_role not in config_var.role_dict.keys():
         await ctx.send("You need to include a valid role id in this subcommand, use `{}role list` to see them."
-                       .format(cmd_prefix))
+                       .format(config_var.cmd_prefix))
         return
 
-    target_role_object = await commands.RoleConverter().convert(ctx, role_dict[req_role])
+    target_role_object = await commands.RoleConverter().convert(ctx, config_var.role_dict[req_role])
     if target_role_object not in ctx.message.author.roles:
-        await ctx.send("You don't have the requested role, to add a role use: `{}role get <role>`.".format(cmd_prefix))
+        await ctx.send("You don't have the requested role, to add a role use: `{}role get <role>`.".format(
+            config_var.cmd_prefix))
         return
 
-    logger.info('Now attempting to remove {} from the role: "{}".'.format(ctx.message.author, role_dict[req_role]))
+    logger.info('Now attempting to remove {} from the role: "{}".'.format(
+        ctx.message.author, config_var.role_dict[req_role]))
     await ctx.author.remove_roles(target_role_object)
-    logger.info('Removal of {} from role: "{}" completed successfully.'.format(ctx.message.author, role_dict[req_role]))
-    await ctx.send("You have been removed from the group: " + role_dict[req_role])
+    logger.info('Removal of {} from role: "{}" completed successfully.'.format(
+        ctx.message.author, config_var.role_dict[req_role]))
+    await ctx.send("You have been removed from the group: " + config_var.role_dict[req_role])
 
 
 @role.command(name="list")
 async def list_roles(ctx):
     """Lists the currently working roles that the bot can give/take."""
     await ctx.send("Role list:\n```\n{}```\nTo use these role names, simply type: `{}role get <role>` in this channel."
-                   .format(parsed_role_list_text, cmd_prefix))
+                   .format(parsed_role_list_text, config_var.cmd_prefix))
 
 
 @bot.command()
 async def stop_process(ctx):
-    if ctx.message.author.id == owner_id:
+    if ctx.message.author.id == config_var.owner_id:
         await ctx.send(":wave:")
-        await jikanAIO.close()
         time_check_task.cancel()
         await bot.logout()
         logger.warning("Bot has now logged out and is shutting down!")
@@ -765,7 +442,7 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     while thread_id in vote_file_queue:
         thread_id = random.randint(1, 10000)
 
-    main_guild_obj = bot.get_guild(main_guild_id)
+    main_guild_obj = bot.get_guild(config_var.main_guild_id)
 
     await _generate_blue_role_list(main_guild_obj)
 
@@ -934,7 +611,7 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
                                           "your votes**__.\n\nHere's an example of its use: " \
                                           "`{0}vote_for Freddie Kim_Jong-Un Mao`, here you are voting for Freddie " \
                                           "as your first choice, Lil' Kimmy as your second and Mao as your last " \
-                                          "choice.".format(cmd_prefix)
+                                          "choice.".format(config_var.cmd_prefix)
 
     # Now need to handle directories for vote storage under the vote_name
     if not os.path.exists("./active_votes/"):
@@ -948,7 +625,8 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
         json.dump(vote_storage, json_file, indent=4)
         logger.info("Written JSON file to ./active_votes/vote.json.")
 
-    target_announce_channel = await commands.TextChannelConverter().convert(ctx, str(main_announcement_channel_id))
+    target_announce_channel = await commands.TextChannelConverter().convert(
+        ctx, str(config_var.main_announcement_channel_id))
 
     await target_announce_channel.send(announce_message)
     await _add_deadline(close_datetime, "_auto_close_active_vote()", coro=True)
@@ -1006,7 +684,7 @@ async def colour_me(ctx, colour_hex: str):
     exclusion_cube_origins = []
 
     # Set up exclusion zones for colours
-    for admin_role_name in protected_role_list:
+    for admin_role_name in config_var.protected_role_list:
         # Let's first gather all the admin role
         try:
             admin_role = await commands.RoleConverter().convert(ctx, admin_role_name)
@@ -1016,7 +694,7 @@ async def colour_me(ctx, colour_hex: str):
         except discord.ext.commands.errors.BadArgument:
             logger.info("Admin role defined in config not found in guild.")
 
-    for extra_exclusion_colour in extra_exclusion_colours:
+    for extra_exclusion_colour in config_var.extra_exclusion_colours:
         hex_exclusion_colour_split = [extra_exclusion_colour[0:2],
                                       extra_exclusion_colour[2:4],
                                       extra_exclusion_colour[4:6]]
@@ -1045,7 +723,7 @@ async def colour_me(ctx, colour_hex: str):
     # Not much left to do, only need to create the custom colour role and make sure that it
     # sits below the lowest defined admin role.
     admin_role_obj_list = {}
-    for admin_role in protected_role_list:
+    for admin_role in config_var.protected_role_list:
         try:
             admin_role_object = await commands.RoleConverter().convert(ctx, admin_role)
             admin_role_obj_list[admin_role_object.position] = admin_role_object
@@ -1084,32 +762,79 @@ async def colour_me(ctx, colour_hex: str):
     await _clean_colour_roles(ctx.guild)
 
 
-# Begin logging
-print("Logging startup...")
-logger = logging.getLogger("GCHQBot")
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('[{asctime}] [{levelname:}] {name}: {message}', '%Y-%m-%d %H:%M:%S', style='{')
-file_log = logging.FileHandler("./logs/bot.log", encoding="utf-8", mode="w")
-console_log = logging.StreamHandler()
-file_log.setFormatter(formatter)
-console_log.setFormatter(formatter)
-logger.addHandler(file_log)
-logger.addHandler(console_log)
-logger.info("Logging configured, running rest of startup.")
+if __name__ == "__main__":
 
-if not os.path.exists("./cogs/"):
-    os.mkdir("./cogs/")
-    logger.info("Created ./cogs/ directory.")
-if not os.path.exists("./cogs/loaded/"):
-    os.mkdir("./cogs/loaded/")
-    logger.info("Created ./cogs/loaded/ directory.")
-if not os.path.exists("./cogs/unloaded/"):
-    os.mkdir("./cogs/unloaded/")
-    logger.info("Created ./cogs/unloaded/ directory.")
-if not os.path.exists("./deadlines/"):
-    os.mkdir("./deadlines/")
-    logger.info("Created ./deadlines/ directory.")
+    from graph_gen import vote_graph
+    from config.config_reader import ConfigReader
 
-logger.info("Starting bot process.")
-vote_ending = False
-bot.run(b_token)
+    if not os.path.exists("./logs/"):
+        os.mkdir("./logs/")
+        print("Created ./logs/ folder for file based logging.")
+
+    # Begin logging
+    print("Logging startup...")
+    logger = logging.getLogger("GCHQBot")
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('[{asctime}] [{levelname:}] {name}: {message}', '%Y-%m-%d %H:%M:%S', style='{')
+    file_log = logging.FileHandler("./logs/bot.log", encoding="utf-8", mode="w")
+    console_log = logging.StreamHandler()
+    file_log.setFormatter(formatter)
+    console_log.setFormatter(formatter)
+    logger.addHandler(file_log)
+    logger.addHandler(console_log)
+    logger.info("Logging configured, running rest of startup.")
+
+    config_var = ConfigReader()
+
+    # Just a lil' cleaning up code for when tempfiles were not truly treated as temporary.
+    with os.scandir("./") as root_dir:
+        for item in root_dir:
+            if item.name.startswith("tempfile"):
+                os.remove(item)
+
+    print("Assigning variables...")
+
+    vote_file_in_use = False
+    current_mal_req_count_ps = 0
+    current_mal_req_count_pm = 0
+    vote_file_queue = []
+
+    colour_list = ["purple", "blue", "green", "yellow", "orange", "red", "irradiated_green"]
+
+    background_emoji_server_id = 192291925326299137
+    upvote_id = 536241661286547456
+    downvote_id = 536241664768081941
+
+    delete_messages_after = 60
+    exclusion_range = 100
+    # config_var.extra_exclusion_colours = ["2C2F33", "23272A", "99AAB5", "2B2B2B", "212121"]
+
+    watching = discord.Activity(type=discord.ActivityType.watching, name="you")
+
+    parsed_role_list_text = ""
+    for name in config_var.role_dict.keys():
+        parsed_role_list_text = parsed_role_list_text + "\n- " + name
+
+    autism_score_format_regex = r"\((\d+|\d\?\d|(\d|\d\.\d+)\²)\/50\)$"
+    url_regex = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+
+    if not os.path.exists("./cogs/"):
+        os.mkdir("./cogs/")
+        logger.info("Created ./cogs/ directory.")
+    if not os.path.exists("./cogs/loaded/"):
+        os.mkdir("./cogs/loaded/")
+        logger.info("Created ./cogs/loaded/ directory.")
+    if not os.path.exists("./cogs/unloaded/"):
+        os.mkdir("./cogs/unloaded/")
+        logger.info("Created ./cogs/unloaded/ directory.")
+    if not os.path.exists("./deadlines/"):
+        os.mkdir("./deadlines/")
+        logger.info("Created ./deadlines/ directory.")
+
+    logger.info("Starting bot process.")
+    vote_ending = False
+    bot.command_prefix = config_var.cmd_prefix
+    for autoload_cog in os.listdir("./cogs/loaded/"):
+        if autoload_cog.endswith(".py"):
+            bot.load_extension("cogs.loaded."+autoload_cog.split(".")[0])
+    bot.run(config_var.b_token)
