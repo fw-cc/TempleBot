@@ -1,18 +1,21 @@
-from discord.ext import commands
 import asyncio
-import logging
 import binascii
-import scipy.cluster
-import discord
+import logging
+import random
 from datetime import datetime
-import numpy as np
-from PIL import Image
-import aiohttp
+
 import aiofiles
-from jikanpy import AioJikan
+import aiohttp
+import numpy as np
 import pytz
-from config.config_reader import ConfigReader
+import scipy.cluster
+from PIL import Image
 import jikanpy.exceptions
+from jikanpy import AioJikan
+import discord
+from discord.ext import commands
+
+from config.config_reader import ConfigReader
 
 
 class WeebCog(commands.Cog):
@@ -21,25 +24,51 @@ class WeebCog(commands.Cog):
         self.logger = logging.getLogger("GCHQBot.weeb")
         self.british_timezone = pytz.timezone('Europe/London')
         self.logger.info("Opening MAL API event loop.")
-        self.jikanAIO = AioJikan(loop=asyncio.get_event_loop())
+        self.jikan_aio = AioJikan(loop=asyncio.get_event_loop())
+        self.message_reaction_waiting_h_table = {}
         self.current_mal_req_count_ps = 0
         self.current_mal_req_count_pm = 0
 
     @commands.command(name="weeb_search")
     async def weeb_search_command(self, ctx):
-        ctx.message.content = ctx.message.content.strip(config_var.cmd_prefix).strip("weeb_search ")
-        async with self.bot.get_channel(config_var.weeb_channel_id).typing():
+        ctx.message.content = ctx.message.content.strip(CONFIG_VAR.cmd_prefix).strip("weeb_search ")
+        async with self.bot.get_channel(CONFIG_VAR.weeb_channel_id).typing():
             try:
                 await self.anime_title_request_func(ctx.message)
             except jikanpy.exceptions.APIException:
-                self.logger.exception("jikanpy.exceptions.APIException raised, attempting API restart.")
-                await self.jikanAIO.close()
-                self.jikanAIO = AioJikan(loop=asyncio.get_event_loop())
+                self.logger.exception("jikanpy.exceptions.APIException raised, attempting API "
+                                      "restart.")
+                await self.jikan_aio.close()
+                self.jikan_aio = AioJikan(loop=asyncio.get_event_loop())
                 await self.anime_title_request_func(ctx.message)
             asyncio.create_task(self.mal_rate_limit_down_counter())
 
     def cog_unload(self):
-        self.jikanAIO.close()
+        self.jikan_aio.close()
+
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction, user):
+        if user.bot:
+            return
+
+        message_id_in_use = None
+        for waiting_message in self.message_reaction_waiting_h_table.values():
+            if reaction.message.id == waiting_message.id:
+                message_id_in_use = waiting_message
+
+        if message_id_in_use is None:
+            return
+
+        allowed_emoji = [":zero:", ":one:", ":two:", ":three:", ":four:", ":five:", ":regional_indicator_x:"]
+        if reaction.emoji.name not in allowed_emoji:
+            return
+
+        reverse_word_to_numeral_hash_table = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                                              "regional_indicator_x": 999}
+
+        self.message_reaction_waiting_h_table[message_id_in_use["msg_rand_id"]] \
+            ["user_reaction"] = reverse_word_to_numeral_hash_table[reaction.emoji.name.strip(":")]
+        self.message_reaction_waiting_h_table[message_id_in_use["msg_rand_id"]]["user_reacted"] = True
 
     async def mal_rate_limit_down_counter(self):
         await asyncio.sleep(2)
@@ -50,16 +79,19 @@ class WeebCog(commands.Cog):
         self.logger.debug("Reduced per minute count.")
 
     async def anime_title_request_func(self, message_class):
-        if message_class.content.startswith("["):
-            req_type = "manga"
-        elif message_class.content.startswith("{"):
-            req_type = "anime"
-        else:
-            return None
 
+        def m_a_type(msg_object):
+            if message_class.content.startswith("["):
+                return "manga"
+            elif message_class.content.startswith("{"):
+                return "anime"
+            else:
+                return None
+
+        req_type = m_a_type(message_class)
         query_term = message_class.content.strip("{}[]")
 
-        weeb_shit_channel = self.bot.get_channel(config_var.weeb_channel_id)
+        weeb_shit_channel = self.bot.get_channel(CONFIG_VAR.weeb_channel_id)
 
         paused = True
         while paused:
@@ -74,16 +106,57 @@ class WeebCog(commands.Cog):
         self.current_mal_req_count_ps += 1
 
         self.logger.debug("Making API request.")
-        r_obj_raw = await self.jikanAIO.search(search_type=req_type, query=query_term)
+        r_obj_raw = await self.jikan_aio.search(search_type=req_type, query=query_term)
         self.logger.debug("API Request complete.")
 
-        '''
-        # Time to begin packaging the embed for returning to the user.
-        pprint.pprint(r_obj_raw["results"][0])
-        '''
+        # PLACEHOLDER FOR BETTER RESULT OPTIONS
+        w_to_n_h_tab = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+        item_selection_embed = discord.Embed(title=f"GCHQBot {m_a_type(message_class).capitalize()} Selection.")
+        options_list_string = ""
+        number_to_title = {}
+        try:
+            for i in range(5):
+                options_list_string += f":{w_to_n_h_tab[i]}: - {r_obj_raw['results'][i]['title']}\n"
+                number_to_title[f":{w_to_n_h_tab[i]}:"] = r_obj_raw['results'][i]
+        except Exception:
+            pass
 
-        r_obj = r_obj_raw['results'][0]
-        if r_obj['title'] in config_var.blocked_mal_search_results:
+        options_list_string += f":regional_indicator_x: - None of the above"
+        item_selection_embed.add_field(name="Are any of these correct?",
+                                       value=options_list_string)
+
+        msg_rand_id = random.randint(0, 100000)
+        while msg_rand_id in self.message_reaction_waiting_h_table.keys():
+            msg_rand_id = random.randint(0, 100000)
+
+        initial_option_message = await weeb_shit_channel.send(embed=item_selection_embed)
+
+        for emote in number_to_title.keys():
+            await initial_option_message.add_reaction(emote)
+        await initial_option_message.add_reaction(":regional_indicator_x:")
+
+        self.message_reaction_waiting_h_table[msg_rand_id] = {"number_to_title": number_to_title,
+                                                              "msg_id": initial_option_message.id,
+                                                              "msg_rand_id": msg_rand_id,
+                                                              "user_reacted": False,
+                                                              "user_reaction": 0}
+
+        loop_sleep_time_s = 0.05
+        max_loop_runtime_s = 30
+        loop_runtime_s = 0
+        while not self.message_reaction_waiting_h_table[msg_rand_id]["user_reacted"]:
+            await asyncio.sleep(loop_sleep_time_s)
+            loop_runtime_s += loop_sleep_time_s
+            if loop_runtime_s >= max_loop_runtime_s:
+                await initial_option_message.delete()
+                return
+
+        if self.message_reaction_waiting_h_table[msg_rand_id]["user_reaction"] == 999:
+            await initial_option_message.delete()
+            return
+
+        r_obj = r_obj_raw['results'][self.message_reaction_waiting_h_table[msg_rand_id]["user_reaction"]]
+        if r_obj['title'] in CONFIG_VAR.blocked_mal_search_results:
             return
 
         prepro_img_url = r_obj['image_url'].rsplit("?", 1)[0].rsplit(".", 1)
@@ -96,27 +169,29 @@ class WeebCog(commands.Cog):
                     await temp_file.write(await target_image_res.read())
                     await temp_file.close()
 
-                    # CODE HERE USED FOR FINDING DOMINANT COLOUR, by Stack Overflow user: Peter Hansen
+                    # CODE HERE USED FOR FINDING DOMINANT COLOUR, by Stack Overflow user: Peter
+                    # Hansen
                     # https://stackoverflow.com/questions/3241929/python-find-dominant-most-common-color-in-an-image
                     num_clusters = 5
-                    im = Image.open(f"./tempfile_{r_obj['mal_id']}.jpg")
-                    im = im.resize((150, 210))  # optional, to reduce time
-                    ar = np.asarray(im)
-                    shape = ar.shape
-                    ar = ar.reshape(scipy.product(shape[:2]), shape[2]).astype(float)
+                    image_object = Image.open(f"./tempfile_{r_obj['mal_id']}.jpg")
+                    image_object = image_object.resize((150, 210))  # optional, to reduce time
+                    np_image_array = np.asarray(image_object)
+                    shape = np_image_array.shape
+                    np_image_array = np_image_array.reshape(scipy.product(shape[:2]),
+                                                            shape[2]).astype(float)
 
                     self.logger.debug('finding clusters')
-                    codes, dist = scipy.cluster.vq.kmeans(ar, num_clusters)
+                    codes = scipy.cluster.vq.kmeans(np_image_array, num_clusters)[0]
 
-                    vecs, dist = scipy.cluster.vq.vq(ar, codes)  # assign codes
-                    counts, bins = scipy.histogram(vecs, len(codes))  # count occurrences
+                    vecs = scipy.cluster.vq.vq(np_image_array, codes)[0]  # assign codes
+                    counts = scipy.histogram(vecs, len(codes))[0]  # count occurrences
 
                     index_max = scipy.argmax(counts)  # find most frequent
                     peak = codes[index_max]
                     embed_colour = binascii.hexlify(bytearray(int(c) for c in peak)).decode('ascii')
                     # ENDS
 
-                    im.close()
+                    image_object.close()
                     target_image_res.close()
 
                     colour_hex_split = [embed_colour[0:2], embed_colour[2:4], embed_colour[4:6]]
@@ -128,7 +203,8 @@ class WeebCog(commands.Cog):
                         colour_dec_concat += str(colour_dec)
                     found_image = True
                 else:
-                    colour_dec_split = [114, 137, 218]  # Discord's "Blurple", in the case that image isn't found
+                    # Discord's "Blurple", in the case that image isn't found
+                    colour_dec_split = [114, 137, 218]
                     found_image = False
 
         item_embed = discord.Embed(title=(r_obj['title'] + " [" + r_obj['type'] + "]"), url=r_obj['url'],
@@ -138,9 +214,9 @@ class WeebCog(commands.Cog):
                                                                   b=colour_dec_split[2]))
 
         if req_type == "anime":
-            new_media_obj = await self.jikanAIO.anime(r_obj["mal_id"])
+            new_media_obj = await self.jikan_aio.anime(r_obj["mal_id"])
         else:
-            new_media_obj = await self.jikanAIO.manga(r_obj["mal_id"])
+            new_media_obj = await self.jikan_aio.manga(r_obj["mal_id"])
 
         now = datetime.now(self.british_timezone)
 
@@ -154,7 +230,7 @@ class WeebCog(commands.Cog):
         now_brit_day = brit_day_in + date_ordinal_letter(int(brit_day_in))
         now_brit = now.strftime(f'%a %b {now_brit_day}, %Y at %H:%M:%S')
 
-        '''
+        """
         embed_pregen_dict = {
             "title": r_obj['title']+" ["+r_obj['type']+"]",
             "url": r_obj['url'],
@@ -169,23 +245,24 @@ class WeebCog(commands.Cog):
             "image": {},
             "video": {},
             "provider": {}
-        }'''
+        }"""
 
         def id_letter(req_form):
             if req_form == "anime":
                 return "a"
-            else:
-                return "m"
+
+            return "m"
 
         if r_obj["synopsis"] == "":
             r_obj["synopsis"] = f"No synopsis information has been added to this title. " \
-                f"Help improve the MAL database by adding a synopsis " \
-                f"[here](https://myanimelist.net/dbchanges.php?{id_letter(req_type)}" \
-                f"id={r_obj['mal_id']}&t=synopsis)."
+                                f"Help improve the MAL database by adding a synopsis " \
+                                f"[here](https://myanimelist.net/dbchanges.php?{id_letter(req_type)}" \
+                                f"id={r_obj['mal_id']}&t=synopsis)."
 
         # test_from_dict_embed = discord.Embed.from_dict(embed_pregen_dict)
-        # test_from_dict_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
-        #                                url="https://github.com/Pytato/GCHQBot")
+        # test_from_dict_embed.set_author(name="Pytato/GCHQBot",
+        #                                 icon_url="https://i.imgur.com/5zaQwWr.jpg",
+        #                                 url="https://github.com/Pytato/GCHQBot")
         # test_from_dict_embed.add_field(name="Synopsis:", value=r_obj['synopsis'], inline=False)
         # test_from_dict_embed.set_thumbnail(url=new_img_url)
 
@@ -225,33 +302,25 @@ class WeebCog(commands.Cog):
                 if start == "?" or start_obj > now:
                     release_status = "Not Yet Airing"
 
-            item_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
-                                                               f"To: {end}\n"
-                                                               f"Status: {release_status}\n"
-                                                               f"Episode Count: {r_obj['episodes']}", inline=True)
+            item_embed.add_field(name="Airing Details:",
+                                 value=f"From: {start}\n"
+                                       f"To: {end}\n"
+                                       f"Status: {release_status}\n"
+                                       f"Episode Count: {r_obj['episodes']}", inline=True)
             try:
                 item_embed.add_field(name="Other Details:",
                                      value=f"Score: {r_obj['score']}\n"
                                            f"Age Rating: {r_obj['rated']}\n"
                                            f"Studio: {new_media_obj['studios'][0]['name']}\n"
-                                           f"Members: " + "{:,}".format(r_obj['members']), inline=True)
+                                           f"Members: " + "{:,}".format(r_obj['members']),
+                                     inline=True)
             except IndexError:
                 item_embed.add_field(name="Other Details:",
                                      value=f"Score: {r_obj['score']}\n"
                                            f"Age Rating: {r_obj['rated']}\n"
                                            f"Studio: Not Yet Defined\n"
-                                           f"Members: " + "{:,}".format(r_obj['members']), inline=True)
-
-            # test_from_dict_embed.add_field(name="Airing Details:", value=f"From: {start}\n"
-            #                                                             f"To: {end}\n"
-            #                                                             f"Status: {release_status}\n"
-            #                                                             f"Episode Count: {r_obj['episodes']}",
-            #                               inline=True)
-            # test_from_dict_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
-            #                                                            f"Age Rating: {r_obj['rated']}\n"
-            #                                                            f"My Anime List ID: {r_obj['mal_id']}\n"
-            #                                                            f"Members: " + "{:,}".format(r_obj['members']),
-            #                               inline=True)
+                                           f"Members: " + "{:,}".format(r_obj['members']),
+                                     inline=True)
 
         else:
             if r_obj['volumes'] == 0:
@@ -271,21 +340,22 @@ class WeebCog(commands.Cog):
             except KeyError:
                 r_obj['rated'] = "No Rating"
 
-            item_embed.add_field(name="Publishing Details:", value=f"From: {start}\n"
-                                                                   f"To: {end}\n"
-                                                                   f"Status: {release_status}\n"
-                                                                   f"Volume Count: {r_obj['volumes']}", inline=True)
-            item_embed.add_field(name="Other Details:", value=f"Score: {r_obj['score']}\n"
-                                                              f"Age Rating: {r_obj['rated']}\n"
-                                                              f"My Anime List ID: {r_obj['mal_id']}\n"
-                                                              f"Members: " + "{:,}".format(r_obj['members']),
-                                 inline=True)
+            item_embed.add_field(name="Publishing Details:",
+                                 value=f"From: {start}\n"
+                                       f"To: {end}\n"
+                                       f"Status: {release_status}\n"
+                                       f"Volume Count: {r_obj['volumes']}", inline=True)
+            item_embed.add_field(name="Other Details:",
+                                 value=f"Score: {r_obj['score']}\n"
+                                       f"Age Rating: {r_obj['rated']}\n"
+                                       f"My Anime List ID: {r_obj['mal_id']}\n"
+                                       f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
         await weeb_shit_channel.send(embed=item_embed)
 
 
 def setup(bot):
-    global config_var
+    global CONFIG_VAR
 
-    config_var = ConfigReader()
+    CONFIG_VAR = ConfigReader()
     bot.add_cog(WeebCog(bot))
