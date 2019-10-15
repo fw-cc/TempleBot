@@ -61,7 +61,8 @@ class ConfigReader:
 
     def regen_config(self):
         shutil.copyfile(self.run_root+"default_config.json", self.run_root+"config.json")
-        input("Generated config file in ./config/config.json, edit this before you run the bot again.")
+        input("Generated config file in ./config/config.json, edit this before you run the "
+              "bot again.")
         sys.exit(0)
 
 
