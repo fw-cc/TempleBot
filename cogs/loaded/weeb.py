@@ -41,13 +41,13 @@ class WeebCog(commands.Cog):
     async def weeb_search_command(self, ctx):
         ctx.message.content = ctx.message.content.strip(CONFIG_VAR.cmd_prefix).strip("weeb_search ")
         try:
-            await self.anime_title_request_func(ctx.message)
+            await self.anime_title_request_func(ctx.message, ctx.message)
         except jikanpy.exceptions.APIException:
             self.logger.exception("jikanpy.exceptions.APIException raised, attempting API "
                                   "restart.")
             await self.jikan_aio.close()
             self.jikan_aio = AioJikan(loop=asyncio.get_event_loop())
-            await self.anime_title_request_func(ctx.message)
+            await self.anime_title_request_func(ctx.message, ctx.message)
         asyncio.create_task(self.mal_rate_limit_down_counter())
 
     def cog_unload(self):
@@ -88,12 +88,12 @@ class WeebCog(commands.Cog):
         self.current_mal_req_count_pm -= 1
         self.logger.debug("Reduced per minute count.")
 
-    async def anime_title_request_func(self, message_class):
+    async def anime_title_request_func(self, message_class, initial_command):
 
         def m_a_type(msg_object):
-            if message_class.content.startswith("["):
+            if msg_object.content.startswith("["):
                 return "manga"
-            elif message_class.content.startswith("{"):
+            elif msg_object.content.startswith("{"):
                 return "anime"
             else:
                 return None
@@ -173,7 +173,10 @@ class WeebCog(commands.Cog):
             return
 
         r_obj = r_obj_raw['results'][self.message_reaction_waiting_h_table[msg_rand_id]["user_reaction"]]
-        if r_obj['title'] in CONFIG_VAR.blocked_mal_search_results:
+        if r_obj['title'] in CONFIG_VAR.blocked_mal_search_results or (
+                r_obj["rated"].lower() == 'rx' and CONFIG_VAR.explicit_search_protection_on):
+            await initial_option_message.delete()
+            await initial_command.delete()
             return
 
         prepro_img_url = r_obj['image_url'].rsplit("?", 1)[0].rsplit(".", 1)
@@ -369,6 +372,7 @@ class WeebCog(commands.Cog):
                                        f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
         await initial_option_message.delete()
+        await initial_command.delete()
         await weeb_shit_channel.send(embed=item_embed)
         await _clean_temp_files()
 
