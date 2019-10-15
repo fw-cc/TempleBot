@@ -28,6 +28,7 @@ class WeebCog(commands.Cog):
         self.message_reaction_waiting_h_table = {}
         self.current_mal_req_count_ps = 0
         self.current_mal_req_count_pm = 0
+        self.logger.info("Loaded WeebCog")
 
     @commands.command(name="weeb_search")
     async def weeb_search_command(self, ctx):
