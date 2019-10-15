@@ -14,7 +14,7 @@ import json
 import pytz
 from discord.ext import commands
 
-bot = commands.Bot(command_prefix="placeholder")
+bot = commands.Bot(command_prefix="placeholder_bot")
 
 
 async def _time_check():
@@ -29,7 +29,8 @@ async def _time_check():
                         eval(f"asyncio.create_task({task_meta_tuple[0]})")
                     elif not task_meta_tuple[1]:
                         eval(f"{task_meta_tuple[0]}")
-                    logger.info(f"Finished running task: {task_meta_tuple[0]}, removed from deadline list")
+                    logger.info(f"Finished running task: {task_meta_tuple[0]}, "
+                                f"removed from deadline list")
                     with open("./deadlines/deadline.json", "r+") as deadlines_json:
                         deadlines_struct = json.load(deadlines_json)
                     try:
@@ -45,7 +46,8 @@ async def _time_check():
 
 
 async def _add_deadline(datetime_obj, task: str, coro=False, use_file=True):
-    """datetime_obj must be a timezone aware datetime object so it may be internally converted to UTC."""
+    """datetime_obj must be a timezone aware datetime object so it may be internally
+    converted to UTC."""
     try:
         glob_deadline_dict[datetime_obj.isoformat()] = [task, coro]
         logger.info(f"Added {datetime_obj} deadline with action {task} to execution list.")
@@ -78,7 +80,9 @@ async def _generate_blue_role_list(guild):
 
 
 async def _test_for_aut_score(member_after, member_before=None):
-    aut_blue_role = member_after.guild.get_role(config_var.autism_score_blue_role_id)
+    aut_blue_role = member_after.guild.get_role(CONFIG_VAR.autism_score_blue_role_id)
+    if aut_blue_role is None:
+        return
     if member_after.nick is None:
         return
     if member_before is not None:
@@ -89,35 +93,47 @@ async def _test_for_aut_score(member_after, member_before=None):
                 # This is an instance where the user has not removed or added an autism score.
                 return
             else:
-                # In this case the user has removed their autism score and will lose their blue role.
-                await member_after.remove_roles(aut_blue_role, reason="Member removed autism score from their name.")
+                # In this case the user has removed their autism score and
+                # will lose their blue role.
+                await member_after.remove_roles(aut_blue_role, reason="Member removed autism score "
+                                                                      "from their name.")
         else:
             if re.search(autism_score_format_regex, member_after.nick) is not None:
-                # In this case the member has added an autism score to their name so they will get the role.
-                await member_after.add_roles(aut_blue_role, reason="Member added an autism score to their name.")
+                # In this case the member has added an autism score to their name so they
+                # will get the role.
+                await member_after.add_roles(aut_blue_role, reason="Member added an autism score "
+                                                                   "to their name.")
                 try:
-                    await member_after.send('You have been given the "{}" role for adding an autism score to your '
-                                            'nickname in GCHQ. This role will be automatically removed if you take '
-                                            'your autism score out of your name.'.format(aut_blue_role.name))
+                    await member_after.send('You have been given the "{}" role for adding an '
+                                            'autism score to your '
+                                            'nickname in GCHQ. This role will be automatically '
+                                            'removed if you take '
+                                            'your autism score out of your name.'
+                                            .format(aut_blue_role.name))
                 except discord.errors.Forbidden:
                     pass
             else:
-                # Here the user didn't have an autism score and hasn't added one either, nothing needs to be done.
+                # Here the user didn't have an autism score and hasn't added one either,
+                # nothing needs to be done.
                 return
     elif member_before is None:
-        # In this case the function is being run from startup, so we just check for people having autism scores.
+        # In this case the function is being run from startup, so we just check for people
+        # having autism scores.
         if re.search(autism_score_format_regex, str(member_after.nick)) is not None and (
                 aut_blue_role not in member_after.roles):
-            await member_after.add_roles(aut_blue_role, reason="Member has autism score in name on bot startup.")
+            await member_after.add_roles(aut_blue_role, reason="Member has autism score in name "
+                                                               "on bot startup.")
             try:
-                await member_after.send('You have been given the "{}" role for adding an autism score to your nickname '
-                                        'in GCHQ. This role will be automatically removed if you take your autism '
-                                        'score out of your name.'.format(aut_blue_role.name))
+                await member_after.send('You have been given the "{}" role for adding an autism '
+                                        'score to your nickname in GCHQ. This role will be '
+                                        'automatically removed if you take your autism score '
+                                        'out of your name.'.format(aut_blue_role.name))
             except discord.errors.Forbidden:
                 pass
         elif re.search(autism_score_format_regex, str(member_after.nick)) is None and (
                 aut_blue_role in member_after.roles):
-            await member_after.remove_roles(aut_blue_role, reason="Member has no autism score in name on bot startup.")
+            await member_after.remove_roles(aut_blue_role, reason="Member has no autism score in "
+                                                                  "name on bot startup.")
 
 
 async def _auto_close_active_vote():
@@ -133,11 +149,12 @@ async def _auto_close_active_vote():
 
     now_string = datetime.now(british_timezone).strftime("%Y-%m-%d_%H%M%S")
 
-    sorted_counts = sorted(vote_data["counts"].items(), key=lambda key_val: key_val[1], reverse=True)
+    sorted_counts = sorted(vote_data["counts"].items(), key=lambda key_val: key_val[1],
+                           reverse=True)
 
-    main_guild = bot.get_guild(config_var.main_guild_id)
-    pres_elect_role_obj = main_guild.get_role(config_var.pres_elect_gchq_id)
-    vice_pres_role_obj = main_guild.get_role(config_var.vice_pres_gchq_id)
+    main_guild = bot.get_guild(CONFIG_VAR.main_guild_id)
+    pres_elect_role_obj = main_guild.get_role(CONFIG_VAR.pres_elect_gchq_id)
+    vice_pres_role_obj = main_guild.get_role(CONFIG_VAR.vice_pres_gchq_id)
 
     vote_ending_announcement = f"__**VOTING FOR THE {pres_elect_role_obj.mention} HAS NOW " \
         f"ENDED.**__ \n\n__Final Results:__\n"
@@ -147,12 +164,14 @@ async def _auto_close_active_vote():
         vote_ending_announcement += f"{candidate}: {count}\n"
         sorted_dict.append([candidate, count])
 
-    vote_ending_announcement += f"\nThank you for partaking in this democratic process and congratulate the new " \
-        f"{pres_elect_role_obj.mention}"
+    vote_ending_announcement += f"\nThank you for partaking in this democratic process and " \
+        f"congratulate the new {pres_elect_role_obj.mention}"
 
     try:
-        # new_pres_elect = bot.get_user(int(vote_data['candidate_name_id_tab'][sorted_dict[0][0].lower()]))
-        new_pres_elect = main_guild.get_member(int(vote_data['candidate_name_id_tab'][sorted_dict[0][0].lower()]))
+        # new_pres_elect = bot.get_user(int(vote_data['candidate_name_id_tab']
+        #                                   [sorted_dict[0][0].lower()]))
+        new_pres_elect = main_guild.get_member(int(vote_data['candidate_name_id_tab']
+                                                   [sorted_dict[0][0].lower()]))
         vote_ending_announcement += f": {new_pres_elect.mention}"
         ids_used = True
     except KeyError:
@@ -175,15 +194,17 @@ async def _auto_close_active_vote():
             await member.remove_roles(role_obj, reason="Automated end of term role removal")
 
     if ids_used:
-        await new_pres_elect.add_roles(pres_elect_role_obj, reason="Automated President Elect Assignment.")
+        await new_pres_elect.add_roles(pres_elect_role_obj,
+                                       reason="Automated President Elect Assignment.")
 
-    vote_ending_announcement += '\n\nFive days of mandatory applause have been authorised by the central ' \
-                                'government, please ensure you remain within the guidelines of Article 14.65b.91a ' \
-                                'of the "Handbook of Citizenship" for the duration, penalties associated with ' \
-                                'failing to meet these simple requirements are detailed in Article 141.45a.12 of ' \
-                                'the "GCHQ Penal Charter."\n\n'
+    vote_ending_announcement += '\n\nFive days of mandatory applause have been authorised by the ' \
+                                'central government, please ensure you remain within the ' \
+                                'guidelines of Article 14.65b.91a of the "Handbook of ' \
+                                'Citizenship" for the duration, penalties associated with ' \
+                                'failing to meet these simple requirements are detailed in ' \
+                                'Article 141.45a.12 of the "GCHQ Penal Charter."\n\n'
 
-    main_announcement_channel_obj = bot.get_channel(config_var.main_announcement_channel_id)
+    main_announcement_channel_obj = bot.get_channel(CONFIG_VAR.main_announcement_channel_id)
 
     await main_announcement_channel_obj.send(vote_ending_announcement,
                                              file=discord.File("./vote_visuals/vote_graph.gif"))
@@ -213,11 +234,11 @@ async def on_ready():
     global author_object
 
     # Any crap that needs to be done on startup can go here.
-    author_object = bot.get_user(config_var.owner_id)
+    author_object = bot.get_user(CONFIG_VAR.owner_id)
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
     logger.info("Bot process ready, running autism score checks and generating deadline tasks.")
-    for member in bot.get_guild(config_var.main_guild_id).members:
+    for member in bot.get_guild(CONFIG_VAR.main_guild_id).members:
         await _test_for_aut_score(member)
     if not os.path.exists("./deadlines/deadline.json"):
         with open("./deadlines/deadline.json", "w") as temp_json_create_fp:
@@ -234,7 +255,7 @@ async def on_message(received_message):
     global current_mal_req_count_pm
     global current_mal_req_count_ps
 
-    if received_message.channel.id == config_var.maymay_channel_id:
+    if received_message.channel.id == CONFIG_VAR.maymay_channel_id:
         # Upvote downvote BS
         if (re.search(url_regex, received_message.content) is not None) or \
                 received_message.attachments or received_message.embeds:
@@ -242,18 +263,21 @@ async def on_message(received_message):
             await received_message.add_reaction(downvote_emoji_obj)
         return
 
-    if received_message.channel.id == config_var.weeb_channel_id:
+    if received_message.channel.id == CONFIG_VAR.weeb_channel_id:
         if ((received_message.content.startswith("{") and received_message.content[-1] == "}") or
                 (received_message.content.startswith("[") and received_message.content[-1] == "]")):
-            logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
+            logger.info('{0.author} sent the MAL request: "{0.content}" in "{0.channel}" on the '
+                        'server "{0.guild}".'
                         .format(received_message))
-            received_message.content = config_var.cmd_prefix+"weeb_search "+received_message.content
+            received_message.content = CONFIG_VAR.cmd_prefix + "weeb_search " + received_message.content
             await bot.process_commands(received_message)
             return
 
-    if received_message.channel.id in config_var.valid_command_channel_id_list:
-        if received_message.content.startswith(config_var.cmd_prefix) and received_message.author != bot.user:
-            logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}" on the server "{0.guild}".'
+    if received_message.channel.id in CONFIG_VAR.valid_command_channel_id_list:
+        if received_message.content.startswith(CONFIG_VAR.cmd_prefix) and \
+                received_message.author != bot.user:
+            logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}" on the '
+                        'server "{0.guild}".'
                         .format(received_message))
             try:
                 await bot.process_commands(received_message)
@@ -266,8 +290,10 @@ async def on_message(received_message):
             return
 
     elif received_message.guild is None:  # Indicates a private message
-        if received_message.content.startswith(config_var.cmd_prefix) and received_message.author != bot.user:
-            logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}".'.format(received_message))
+        if received_message.content.startswith(CONFIG_VAR.cmd_prefix) and \
+                received_message.author != bot.user:
+            logger.info('{0.author} sent the command: "{0.content}" in "{0.channel}".'
+                        .format(received_message))
             await bot.process_commands(received_message)
 
     else:
@@ -277,14 +303,14 @@ async def on_message(received_message):
 @bot.event
 async def on_member_join(member):
     logger.info("{} has joined the server.".format(member))
-    await member.send('Welcome to GCHQ, this bot will provide commands allowing you to gain access to '
-                      'hidden text channels in the GCHQ server, use `{0}help` to see commands.'
-                      '\n\nTo see how role based commands work use: `{0}help role`.\n\n'
-                      'It is also **STRONGLY RECOMMENDED** that you read #welcome to find out about the DBAC ruleset '
-                      'and the Constitution of GCHQ.'
-                      .format(config_var.cmd_prefix))
+    await member.send('Welcome to GCHQ, this bot will provide commands allowing you to gain access '
+                      'to hidden text channels in the GCHQ server, use `{0}help` to see '
+                      'commands.\n\nTo see how role based commands work use: `{0}help role`.\n\nIt '
+                      'is also **STRONGLY RECOMMENDED** that you read #welcome to find out about '
+                      'the DBAC ruleset and the Constitution of GCHQ.'
+                      .format(CONFIG_VAR.cmd_prefix))
     pingrole_obj = discord.utils.get(member.guild.roles, name="Pingrole")
-    await asyncio.sleep(600)  # The server this bot is used on has a wait period before you can talk.
+    await asyncio.sleep(600)  # The server this bot is used on has a wait period before talking.
     await member.add_roles(pingrole_obj, reason="New members automatically get Pingrole")
     logger.info("Successfully messaged and added new user to Pingrole.")
 
@@ -299,11 +325,13 @@ async def on_member_update(member_before, member_after):
 
 @bot.group(name="cog")
 async def cog_grp(ctx):
-    """Cog command group, includes the onload an offload sub-commands, invoking the group directly has no effect."""
+    """Cog command group, includes the onload an offload sub-commands, invoking the group
+    directly has no effect."""
     if ctx.invoked_subcommand is None:
-        logger.info("Command: {0.content} from user {0.author} had no subcommand.".format(ctx.message))
-        await ctx.send("You need to include a subcommand with this one, use `{}help cog` if you need further "
-                       "assistance.".format(config_var.cmd_prefix))
+        logger.info("Command: {0.content} from user {0.author} had no subcommand."
+                    .format(ctx.message))
+        await ctx.send("You need to include a subcommand with this one, use `{}help cog` if "
+                       "you need further assistance.".format(CONFIG_VAR.cmd_prefix))
 
 
 @cog_grp.command()
@@ -322,11 +350,13 @@ async def unload(ctx, cog):
 
 @bot.group()
 async def role(ctx):
-    """Role is a command group that houses the common use role commands like: "role get" and "role lose"."""
+    """Role is a command group that houses the common use role commands like: "role get"
+    and "role lose"."""
     if ctx.invoked_subcommand is None:
-        logger.info("Command: {0.content} from user {0.author} had no subcommand.".format(ctx.message))
-        await ctx.send("You need to include a subcommand with this one, use `{}help role` if you need further "
-                       "assistance.".format(config_var.cmd_prefix))
+        logger.info("Command: {0.content} from user {0.author} had no subcommand."
+                    .format(ctx.message))
+        await ctx.send("You need to include a subcommand with this one, use `{}help role` if "
+                       "you need further assistance.".format(CONFIG_VAR.cmd_prefix))
 
 
 @role.command()
@@ -336,12 +366,12 @@ async def get(ctx, req_role=""):
         req_role = req_role.lower()
     except TypeError:
         pass
-    if req_role not in config_var.role_dict.keys():
-        await ctx.send("You need to include a valid role id in this subcommand, use `{}role list` to see them."
-                       .format(config_var.cmd_prefix))
+    if req_role not in CONFIG_VAR.role_dict.keys():
+        await ctx.send("You need to include a valid role id in this subcommand, use `{}role list` "
+                       "to see them.".format(CONFIG_VAR.cmd_prefix))
         return
 
-    target_role_object = await commands.RoleConverter().convert(ctx, config_var.role_dict[req_role])
+    target_role_object = await commands.RoleConverter().convert(ctx, CONFIG_VAR.role_dict[req_role])
     target_user_object = ctx.author
 
     if req_role in colour_list:
@@ -354,23 +384,26 @@ async def get(ctx, req_role=""):
         for colour_role in colour_role_objects:
             if colour_role in target_user_object.roles:
                 logger.info("User already owns a colour role, removing said role now.")
-                await ctx.send("You already have the role: {}, it will be removed.".format(colour_role))
+                await ctx.send("You already have the role: {}, it will be removed."
+                               .format(colour_role))
                 role_to_remove = discord.utils.get(ctx.message.guild.roles, name=colour_role.name)
-                await target_user_object.remove_roles(role_to_remove, reason="User may only have one colour role.")
-                logger.info("Removed the role {0} from user: {1}.".format(role_to_remove, target_user_object))
+                await target_user_object.remove_roles(role_to_remove,
+                                                      reason="User may only have one colour role.")
+                logger.info("Removed the role {0} from user: {1}.".format(role_to_remove,
+                                                                          target_user_object))
         await asyncio.sleep(0.2)
 
     if target_role_object in target_user_object.roles:
-        await ctx.send("You already have the requested role, to remove a role use: `{}role lose <role>`."
-                       .format(config_var.cmd_prefix))
+        await ctx.send("You already have the requested role, to remove a role use: `{}role "
+                       "lose <role>`.".format(CONFIG_VAR.cmd_prefix))
         return
 
     logger.info('Now attempting to add {} to the role: "{}".'.format(
-        ctx.message.author, config_var.role_dict[req_role]))
+        ctx.message.author, CONFIG_VAR.role_dict[req_role]))
     await target_user_object.add_roles(target_role_object, reason="Role requested by user")
     logger.info('Addition of {} to role: "{}" completed successfully.'.format(
-        ctx.message.author, config_var.role_dict[req_role]))
-    await ctx.send("You have been added to the group: " + config_var.role_dict[req_role])
+        ctx.message.author, CONFIG_VAR.role_dict[req_role]))
+    await ctx.send("You have been added to the group: " + CONFIG_VAR.role_dict[req_role])
 
 
 @role.command()
@@ -380,35 +413,36 @@ async def lose(ctx, req_role=""):
         req_role = req_role.lower()
     except TypeError:
         pass
-    if req_role not in config_var.role_dict.keys():
-        await ctx.send("You need to include a valid role id in this subcommand, use `{}role list` to see them."
-                       .format(config_var.cmd_prefix))
+    if req_role not in CONFIG_VAR.role_dict.keys():
+        await ctx.send("You need to include a valid role id in this subcommand, use `{}role list` "
+                       "to see them.".format(CONFIG_VAR.cmd_prefix))
         return
 
-    target_role_object = await commands.RoleConverter().convert(ctx, config_var.role_dict[req_role])
+    target_role_object = await commands.RoleConverter().convert(ctx, CONFIG_VAR.role_dict[req_role])
     if target_role_object not in ctx.message.author.roles:
-        await ctx.send("You don't have the requested role, to add a role use: `{}role get <role>`.".format(
-            config_var.cmd_prefix))
+        await ctx.send("You don't have the requested role, to add a role use: `{}role get "
+                       "<role>`.".format(CONFIG_VAR.cmd_prefix))
         return
 
     logger.info('Now attempting to remove {} from the role: "{}".'.format(
-        ctx.message.author, config_var.role_dict[req_role]))
+        ctx.message.author, CONFIG_VAR.role_dict[req_role]))
     await ctx.author.remove_roles(target_role_object)
     logger.info('Removal of {} from role: "{}" completed successfully.'.format(
-        ctx.message.author, config_var.role_dict[req_role]))
-    await ctx.send("You have been removed from the group: " + config_var.role_dict[req_role])
+        ctx.message.author, CONFIG_VAR.role_dict[req_role]))
+    await ctx.send("You have been removed from the group: " + CONFIG_VAR.role_dict[req_role])
 
 
 @role.command(name="list")
 async def list_roles(ctx):
     """Lists the currently working roles that the bot can give/take."""
-    await ctx.send("Role list:\n```\n{}```\nTo use these role names, simply type: `{}role get <role>` in this channel."
-                   .format(parsed_role_list_text, config_var.cmd_prefix))
+    await ctx.send("Role list:\n```\n{}```\nTo use these role names, simply type: "
+                   "`{}role get <role>` in this channel."
+                   .format(parsed_role_list_text, CONFIG_VAR.cmd_prefix))
 
 
 @bot.command()
 async def stop_process(ctx):
-    if ctx.message.author.id == config_var.owner_id:
+    if ctx.message.author.id == CONFIG_VAR.owner_id:
         await ctx.send(":wave:")
         time_check_task.cancel()
         await bot.logout()
@@ -416,15 +450,16 @@ async def stop_process(ctx):
         await asyncio.sleep(5)
         sys.exit(0)
     else:
-        logger.warning("User: {} attempted to shut the bot down but doesn't have correct permissions!"
-                       .format(ctx.message.author))
+        logger.warning("User: {} attempted to shut the bot down but doesn't have correct "
+                       "permissions!".format(ctx.message.author))
         return
 
 
 @bot.command(pass_context=True)
 @commands.dm_only()
 async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
-    """Used for special votes configured by bot owner, usage example: !vote_for Freddie Kim_Jong-Un Mao.
+    """Used for special votes configured by bot owner, usage example: !vote_for Freddie
+    Kim_Jong-Un Mao.
 
     DM only command.
     """
@@ -442,7 +477,7 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     while thread_id in vote_file_queue:
         thread_id = random.randint(1, 10000)
 
-    main_guild_obj = bot.get_guild(config_var.main_guild_id)
+    main_guild_obj = bot.get_guild(CONFIG_VAR.main_guild_id)
 
     await _generate_blue_role_list(main_guild_obj)
 
@@ -456,8 +491,8 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
             break
 
     if not author_vote_authorised:
-        await ctx.author.send("You do not have the authorisation to vote. Please contact party leadership to establish "
-                              "why this is the case.")
+        await ctx.author.send("You do not have the authorisation to vote. Please contact party "
+                              "leadership to establish why this is the case.")
         return
 
     if not vote_file_queue:
@@ -466,12 +501,14 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
     else:
         vote_file_queue.append(thread_id)
 
-    logging.debug("Thread with ID: {} has been opened in a list of length: {}.".format(thread_id, len(vote_file_queue)))
+    logging.debug("Thread with ID: {} has been opened in a list of length: {}."
+                  .format(thread_id, len(vote_file_queue)))
 
     while vote_file_queue[0] != thread_id or vote_file_in_use:
         if not waiting_message_sent:
-            logger.info("Thread ID: {} has been stopped from accessing the file and is in position {} of the queue."
-                        .format(thread_id, vote_file_queue.index(thread_id)))
+            logger.info("Thread ID: {} has been stopped from accessing the file and is in "
+                        "position {} of the queue.".format(thread_id,
+                                                           vote_file_queue.index(thread_id)))
             waiting_message_sent = True
         await asyncio.sleep(0.05)
 
@@ -505,7 +542,8 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
 
     for user in vote_data["votes"].keys():
         if ctx.author.id == user[1]:
-            await ctx.send("You have already voted in this election, please do not attempt to vote again.")
+            await ctx.send("You have already voted in this election, please do not attempt to "
+                           "vote again.")
             vote_file_in_use = False
             logger.info("User attempted to vote twice.")
             return
@@ -517,7 +555,8 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
 
     for key in votes:  # ensures all vote targets are valid and handles if it's not.
         if key.lower() not in valid_vote_targets:
-            await ctx.send("One or more of your votes are on invalid targets, check the main message for valid "
+            await ctx.send("One or more of your votes are on invalid targets, check the main "
+                           "message for valid "
                            "candidates and try again.")
             logger.info("User failed to select all valid candidates in their vote.")
             vote_file_in_use = False
@@ -528,22 +567,24 @@ async def vote_for(ctx, first_choice="", second_choice="", last_choice=""):
         vote_data["counts"][second_choice.lower()] += 5
         vote_data["counts"][last_choice.lower()] -= 5
     except NameError:
-        await ctx.send("One or more of your votes are on invalid targets, check the main message for valid "
-                       "candidates and try again.")
+        await ctx.send("One or more of your votes are on invalid targets, check the main "
+                       "message for valid candidates and try again.")
         logger.info("User failed to select all valid candidates in their vote.")
         vote_file_in_use = False
         return
 
     vote_data["votes"][ctx.author.id] = votes
-    vote_data["timestamped_votes"].append({"datetime": vote_time, "user_id": ctx.author.id, "votes": votes,
-                                           "name": "{0.name}#{0.discriminator}".format(ctx.author)})
+    vote_data["timestamped_votes"].append({"datetime": vote_time, "user_id": ctx.author.id,
+                                           "votes": votes, "name": "{0.name}#{0.discriminator}"
+                                          .format(ctx.author)})
 
     with open("./active_votes/vote.json", "w") as json_votes:
         json.dump(vote_data, json_votes, indent=4)
         logger.info("Dumped vote data into file, opening up for next command.")
 
     vote_file_in_use = False
-    await ctx.send("Your votes have been registered, thank you for being an active member of our democracy.")
+    await ctx.send("Your votes have been registered, thank you for being an active member of our "
+                   "democracy.")
 
 
 @bot.command(pass_context=True)
@@ -566,10 +607,10 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
 
     logger.info("Successfully finished parsing list of candidates.\n" + str(candidate_list))
 
-    announce_message = "Welcome to GCHQ's Government programmed Conditionally Universal National Term vote System! " \
-                       "Below will be the valid candidates for you to vote for, below that the voting format and " \
-                       "how to take part in GCHQ's democratic process.\n\n" \
-                       "__Eligible Candidates__:\n"
+    announce_message = "Welcome to GCHQ's Government programmed Conditionally Universal National " \
+                       "Term vote System! Below will be the valid candidates for you to vote " \
+                       "for, below that the voting format and how to take part in GCHQ's " \
+                       "democratic process.\n\n__Eligible Candidates__:\n"
 
     try:
         target_role_obj = await discord.ext.commands.RoleConverter().convert(ctx, target_role)
@@ -602,16 +643,19 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
             announce_message += candidate + "\n"
             vote_storage["counts"][candidate.lower()] = 0
 
-    logger.info("Successfully completed the candidates listed on the announcement message and in storage.")
+    logger.info("Successfully completed the candidates listed on the announcement message and "
+                "in storage.")
 
-    announce_message = announce_message + "\nTo vote, send this command to GCHQBot: " \
-                                          "`{0}vote_for <first_choice> <second_choice> <last_choice>`. " \
-                                          "Please understand that while the choice names are not case sensitive, " \
-                                          "they __**must be in order and must be spelt the same way, spaces split up " \
-                                          "your votes**__.\n\nHere's an example of its use: " \
-                                          "`{0}vote_for Freddie Kim_Jong-Un Mao`, here you are voting for Freddie " \
-                                          "as your first choice, Lil' Kimmy as your second and Mao as your last " \
-                                          "choice.".format(config_var.cmd_prefix)
+    announce_message = announce_message + "\nTo vote, send this command to GCHQBot: `{0}vote_for " \
+                                          "<first_choice> <second_choice> <last_choice>`. Please " \
+                                          "understand that while the choice names are not case " \
+                                          "sensitive, they __**must be in order and must be " \
+                                          "spelt the same way, spaces split up your votes**__" \
+                                          ".\n\nHere's an example of its use: `{0}vote_for " \
+                                          "Freddie Kim_Jong-Un Mao`, here you are voting " \
+                                          "for Freddie as your first choice, Lil' Kimmy as " \
+                                          "your second and Mao as your last choice."\
+        .format(CONFIG_VAR.cmd_prefix)
 
     # Now need to handle directories for vote storage under the vote_name
     if not os.path.exists("./active_votes/"):
@@ -626,7 +670,7 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
         logger.info("Written JSON file to ./active_votes/vote.json.")
 
     target_announce_channel = await commands.TextChannelConverter().convert(
-        ctx, str(config_var.main_announcement_channel_id))
+        ctx, str(CONFIG_VAR.main_announcement_channel_id))
 
     await target_announce_channel.send(announce_message)
     await _add_deadline(close_datetime, "_auto_close_active_vote()", coro=True)
@@ -635,8 +679,9 @@ async def start_vote(ctx, target_role, time_till_close, *, candidate_list=""):
 @bot.command()
 @commands.is_owner()
 async def end_vote(ctx):
-    """Ends the currently active vote, cba to refactor such that multiple votes can be simultaneously ongoing because
-    I'm lazy. This is a wrapping function that doesn't generally need to be used, set a time on the start_vote instead.
+    """Ends the currently active vote, cba to refactor such that multiple votes can be
+    simultaneously ongoing because I'm lazy. This is a wrapping function that doesn't generally
+    need to be used, set a time on the start_vote instead.
     """
     global vote_ending
 
@@ -664,7 +709,8 @@ async def colour_me(ctx, colour_hex: str):
         return
 
     if len(colour_hex) > 6:
-        await ctx.send("The colour string requested is invalid.", delete_after=delete_messages_after)
+        await ctx.send("The colour string requested is invalid.",
+                       delete_after=delete_messages_after)
         return
     colour_hex_split = [colour_hex[0:2], colour_hex[2:4], colour_hex[4:6]]
     colour_dec_split = []
@@ -684,7 +730,7 @@ async def colour_me(ctx, colour_hex: str):
     exclusion_cube_origins = []
 
     # Set up exclusion zones for colours
-    for admin_role_name in config_var.protected_role_list:
+    for admin_role_name in CONFIG_VAR.protected_role_list:
         # Let's first gather all the admin role
         try:
             admin_role = await commands.RoleConverter().convert(ctx, admin_role_name)
@@ -694,7 +740,7 @@ async def colour_me(ctx, colour_hex: str):
         except discord.ext.commands.errors.BadArgument:
             logger.info("Admin role defined in config not found in guild.")
 
-    for extra_exclusion_colour in config_var.extra_exclusion_colours:
+    for extra_exclusion_colour in CONFIG_VAR.extra_exclusion_colours:
         hex_exclusion_colour_split = [extra_exclusion_colour[0:2],
                                       extra_exclusion_colour[2:4],
                                       extra_exclusion_colour[4:6]]
@@ -716,14 +762,15 @@ async def colour_me(ctx, colour_hex: str):
         if in_cube:
             await ctx.send(f"The colour you have selected is too close to that of an admin role or "
                            f"protected colour.\n\nYour colour (decimal): {colour_dec_split} "
-                           f"was too close to {cube_center}. \nChange one or more of the components "
-                           f"such that they are {math.ceil(exclusion_range / 2)} away from the protected colour.")
+                           f"was too close to {cube_center}. \nChange one or more of the "
+                           f"components such that they are {math.ceil(exclusion_range / 2)} away "
+                           f"from the protected colour.")
             return
 
     # Not much left to do, only need to create the custom colour role and make sure that it
     # sits below the lowest defined admin role.
     admin_role_obj_list = {}
-    for admin_role in config_var.protected_role_list:
+    for admin_role in CONFIG_VAR.protected_role_list:
         try:
             admin_role_object = await commands.RoleConverter().convert(ctx, admin_role)
             admin_role_obj_list[admin_role_object.position] = admin_role_object
@@ -733,7 +780,8 @@ async def colour_me(ctx, colour_hex: str):
     sorted_admin_list_pos = sorted(admin_role_obj_list)
 
     # Now we have the sorted list of admin roles, let's query all roles and see if we already have
-    # the requested colour created. GCHQBot colour roles have the naming convention: CPS[0x<R><G><B>] in hex.
+    # the requested colour created. GCHQBot colour roles have the naming convention:
+    # CPS[0x<R><G><B>] in hex.
     try:
         prev_colour = await commands.RoleConverter().convert(ctx, f"GCHQ[0x{colour_hex.upper()}]")
         await prev_colour.edit(position=sorted_admin_list_pos[0])
@@ -744,20 +792,23 @@ async def colour_me(ctx, colour_hex: str):
         pass
 
     # Now to create the role we wanted all along.
-    new_colour_role = await ctx.guild.create_role(name=f"GCHQ[0x{colour_hex.upper()}]",
-                                                  reason="Custom colour role generation by GCHQBot.",
-                                                  colour=discord.Colour.from_rgb(r=colour_dec_split[0],
-                                                                                 g=colour_dec_split[1],
-                                                                                 b=colour_dec_split[2]))
+    new_colour_role = await ctx.guild.create_role(
+        name=f"GCHQ[0x{colour_hex.upper()}]",
+        reason="Custom colour role generation by GCHQBot.",
+        colour=discord.Colour.from_rgb(r=colour_dec_split[0],
+                                       g=colour_dec_split[1],
+                                       b=colour_dec_split[2]))
 
     await new_colour_role.edit(position=sorted_admin_list_pos[0])
     await new_colour_role.edit(position=sorted_admin_list_pos[0])
 
     for invoker_role in ctx.author.roles:
         if "GCHQ[0x" in invoker_role.name:
-            await ctx.author.remove_roles(invoker_role, reason="Removing old colour role from user.")
+            await ctx.author.remove_roles(invoker_role,
+                                          reason="Removing old colour role from user.")
 
-    await ctx.author.add_roles(new_colour_role, reason="Automatic custom colour allocation by request.")
+    await ctx.author.add_roles(new_colour_role,
+                               reason="Automatic custom colour allocation by request.")
 
     await _clean_colour_roles(ctx.guild)
 
@@ -775,7 +826,8 @@ if __name__ == "__main__":
     print("Logging startup...")
     logger = logging.getLogger("GCHQBot")
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('[{asctime}] [{levelname:}] {name}: {message}', '%Y-%m-%d %H:%M:%S', style='{')
+    formatter = logging.Formatter('[{asctime}] [{levelname:}] {name}: {message}',
+                                  '%Y-%m-%d %H:%M:%S', style='{')
     file_log = logging.FileHandler("./logs/bot.log", encoding="utf-8", mode="w")
     console_log = logging.StreamHandler()
     file_log.setFormatter(formatter)
@@ -784,7 +836,7 @@ if __name__ == "__main__":
     logger.addHandler(console_log)
     logger.info("Logging configured, running rest of startup.")
 
-    config_var = ConfigReader()
+    CONFIG_VAR = ConfigReader()
 
     # Just a lil' cleaning up code for when tempfiles were not truly treated as temporary.
     with os.scandir("./") as root_dir:
@@ -812,11 +864,12 @@ if __name__ == "__main__":
     watching = discord.Activity(type=discord.ActivityType.watching, name="you")
 
     parsed_role_list_text = ""
-    for name in config_var.role_dict.keys():
+    for name in CONFIG_VAR.role_dict.keys():
         parsed_role_list_text = parsed_role_list_text + "\n- " + name
 
     autism_score_format_regex = r"\((\d+|\d\?\d|(\d|\d\.\d+)\²)\/50\)$"
-    url_regex = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    url_regex = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}" \
+                r"\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
 
     if not os.path.exists("./cogs/"):
         os.mkdir("./cogs/")
@@ -833,8 +886,8 @@ if __name__ == "__main__":
 
     logger.info("Starting bot process.")
     vote_ending = False
-    bot.command_prefix = config_var.cmd_prefix
+    bot.command_prefix = CONFIG_VAR.cmd_prefix
     for autoload_cog in os.listdir("./cogs/loaded/"):
         if autoload_cog.endswith(".py"):
             bot.load_extension("cogs.loaded."+autoload_cog.split(".")[0])
-    bot.run(config_var.b_token)
+    bot.run(CONFIG_VAR.b_token)
