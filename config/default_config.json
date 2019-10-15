@@ -27,6 +27,7 @@
         "exclusion_range": 40
     },
 
-    "blocked_mal_search_results": []
+    "blocked_mal_search_results": [],
+    "explicit_search_protection": true
 
 }

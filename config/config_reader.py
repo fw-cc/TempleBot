@@ -39,6 +39,7 @@ class ConfigReader:
         self.delete_messages_after = config_file["colour_command"]["delete_messages_after"]
         self.exclusion_range = config_file["colour_command"]["exclusion_range"]
         self.blocked_mal_search_results = config_file["blocked_mal_search_results"]
+        self.explicit_search_protection_on = config_file["explicit_search_protection"]
         self.weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
         self.maymay_channel_id = config_file["misc_ids"]["maymay_channel_id"]
 
@@ -57,7 +58,10 @@ class ConfigReader:
         self.vice_pres_gchq_id = config_file["misc_ids"]["vice_pres_id"]
         self.protected_role_list = config_file["colour_command"]["protected_roles"]
         self.extra_exclusion_colours = config_file["colour_command"]["protected_colours"]
+        self.delete_messages_after = config_file["colour_command"]["delete_messages_after"]
+        self.exclusion_range = config_file["colour_command"]["exclusion_range"]
         self.blocked_mal_search_results = config_file["blocked_mal_search_results"]
+        self.explicit_search_protection_on = config_file["explicit_search_protection"]
         self.weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
         self.maymay_channel_id = config_file["misc_ids"]["maymay_channel_id"]
 
