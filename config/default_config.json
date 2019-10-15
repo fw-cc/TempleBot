@@ -22,7 +22,9 @@
 
     "colour_command": {
         "protected_roles": [],
-        "protected_colours": []
+        "protected_colours": [],
+        "delete_messages_after": 60,
+        "exclusion_range": 40
     },
 
     "blocked_mal_search_results": []
