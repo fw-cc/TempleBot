@@ -32,16 +32,15 @@ class WeebCog(commands.Cog):
     @commands.command(name="weeb_search")
     async def weeb_search_command(self, ctx):
         ctx.message.content = ctx.message.content.strip(CONFIG_VAR.cmd_prefix).strip("weeb_search ")
-        async with self.bot.get_channel(CONFIG_VAR.weeb_channel_id).typing():
-            try:
-                await self.anime_title_request_func(ctx.message)
-            except jikanpy.exceptions.APIException:
-                self.logger.exception("jikanpy.exceptions.APIException raised, attempting API "
-                                      "restart.")
-                await self.jikan_aio.close()
-                self.jikan_aio = AioJikan(loop=asyncio.get_event_loop())
-                await self.anime_title_request_func(ctx.message)
-            asyncio.create_task(self.mal_rate_limit_down_counter())
+        try:
+            await self.anime_title_request_func(ctx.message)
+        except jikanpy.exceptions.APIException:
+            self.logger.exception("jikanpy.exceptions.APIException raised, attempting API "
+                                  "restart.")
+            await self.jikan_aio.close()
+            self.jikan_aio = AioJikan(loop=asyncio.get_event_loop())
+            await self.anime_title_request_func(ctx.message)
+        asyncio.create_task(self.mal_rate_limit_down_counter())
 
     def cog_unload(self):
         self.jikan_aio.close()
@@ -53,21 +52,21 @@ class WeebCog(commands.Cog):
 
         message_id_in_use = None
         for waiting_message in self.message_reaction_waiting_h_table.values():
-            if reaction.message.id == waiting_message.id:
+            if reaction.message.id == waiting_message["msg_id"]:
                 message_id_in_use = waiting_message
 
         if message_id_in_use is None:
             return
 
-        allowed_emoji = [":zero:", ":one:", ":two:", ":three:", ":four:", ":five:", ":regional_indicator_x:"]
-        if reaction.emoji.name not in allowed_emoji:
+        allowed_emoji = ["0⃣", "1⃣", "2⃣", "3⃣", "4⃣", "5⃣", "🇽"]
+
+        if reaction.emoji not in allowed_emoji:
             return
 
-        reverse_word_to_numeral_hash_table = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-                                              "regional_indicator_x": 999}
+        reverse_word_to_numeral_hash_table = {"0⃣": 0, "1⃣": 1, "2⃣": 2, "3⃣": 3, "4⃣": 4, "5⃣": 5, "🇽": 999}
 
         self.message_reaction_waiting_h_table[message_id_in_use["msg_rand_id"]] \
-            ["user_reaction"] = reverse_word_to_numeral_hash_table[reaction.emoji.name.strip(":")]
+            ["user_reaction"] = reverse_word_to_numeral_hash_table[reaction.emoji]
         self.message_reaction_waiting_h_table[message_id_in_use["msg_rand_id"]]["user_reacted"] = True
 
     async def mal_rate_limit_down_counter(self):
@@ -131,9 +130,12 @@ class WeebCog(commands.Cog):
 
         initial_option_message = await weeb_shit_channel.send(embed=item_selection_embed)
 
+        unicode_emote_hash_table = {":zero:": "0⃣", ":one:": "1⃣", ":two:": "2⃣",
+                                    ":three:": "3⃣", ":four:": "4⃣", "five": "5⃣"}
+
         for emote in number_to_title.keys():
-            await initial_option_message.add_reaction(emote)
-        await initial_option_message.add_reaction(":regional_indicator_x:")
+            await initial_option_message.add_reaction(unicode_emote_hash_table[emote])
+        await initial_option_message.add_reaction("\N{Regional Indicator Symbol Letter X}")
 
         self.message_reaction_waiting_h_table[msg_rand_id] = {"number_to_title": number_to_title,
                                                               "msg_id": initial_option_message.id,
@@ -351,6 +353,7 @@ class WeebCog(commands.Cog):
                                        f"My Anime List ID: {r_obj['mal_id']}\n"
                                        f"Members: " + "{:,}".format(r_obj['members']), inline=True)
 
+        await initial_option_message.delete()
         await weeb_shit_channel.send(embed=item_embed)
 
 
