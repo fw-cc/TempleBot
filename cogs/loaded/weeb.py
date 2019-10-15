@@ -2,6 +2,7 @@ import asyncio
 import binascii
 import logging
 import random
+import os
 from datetime import datetime
 
 import aiofiles
@@ -16,6 +17,12 @@ import discord
 from discord.ext import commands
 
 from config.config_reader import ConfigReader
+
+
+async def _clean_temp_files():
+    for name in os.listdir("./"):
+        if name.startswith("tempfile"):
+            os.remove(f"./{name}")
 
 
 class WeebCog(commands.Cog):
@@ -47,9 +54,12 @@ class WeebCog(commands.Cog):
         self.jikan_aio.close()
 
     @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        if user.bot:
-            return
+    async def on_reaction_add(self, reaction, user=None):
+        try:
+            if user.bot:
+                return
+        except AttributeError:
+            pass
 
         message_id_in_use = None
         for waiting_message in self.message_reaction_waiting_h_table.values():
@@ -134,15 +144,19 @@ class WeebCog(commands.Cog):
         unicode_emote_hash_table = {":zero:": "0⃣", ":one:": "1⃣", ":two:": "2⃣",
                                     ":three:": "3⃣", ":four:": "4⃣", "five": "5⃣"}
 
-        for emote in number_to_title.keys():
-            await initial_option_message.add_reaction(unicode_emote_hash_table[emote])
-        await initial_option_message.add_reaction("\N{Regional Indicator Symbol Letter X}")
-
         self.message_reaction_waiting_h_table[msg_rand_id] = {"number_to_title": number_to_title,
                                                               "msg_id": initial_option_message.id,
                                                               "msg_rand_id": msg_rand_id,
                                                               "user_reacted": False,
                                                               "user_reaction": 0}
+
+        for emote in number_to_title.keys():
+            await initial_option_message.add_reaction(unicode_emote_hash_table[emote])
+        await initial_option_message.add_reaction("\N{Regional Indicator Symbol Letter X}")
+
+        for reaction in initial_option_message.reactions:
+            if reaction.count > 1:
+                await self.on_reaction_add(reaction)
 
         loop_sleep_time_s = 0.05
         max_loop_runtime_s = 30
@@ -356,6 +370,7 @@ class WeebCog(commands.Cog):
 
         await initial_option_message.delete()
         await weeb_shit_channel.send(embed=item_embed)
+        await _clean_temp_files()
 
 
 def setup(bot):
