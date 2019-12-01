@@ -6,7 +6,8 @@
         "cmd_prefix": "!",
         "valid_cmd_channels": [
             0
-        ]
+        ],
+        "max_managed_voice_channels": 5
     },
 
     "misc_ids": {
@@ -15,7 +16,9 @@
         "main_guild_id": 0,
         "main_announcement_channel_id": 0,
         "autism_role_id": 0,
-        "maymay_channel_id": 0
+        "maymay_channel_id": 0,
+        "initial_managed_channel": 0,
+        "managed_channels_category": 0
     },
 
     "role_table": {},

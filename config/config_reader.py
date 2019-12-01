@@ -42,6 +42,9 @@ class ConfigReader:
         self.explicit_search_protection_on = config_file["explicit_search_protection"]
         self.weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
         self.maymay_channel_id = config_file["misc_ids"]["maymay_channel_id"]
+        self.initial_managed_channel = config_file["misc_ids"]["initial_managed_channel"]
+        self.max_managed_channels = config_file["bot"]["max_managed_voice_channels"]
+        self.managed_channels_category = config_file["misc_ids"]["managed_channels_category"]
 
     def refresh_config(self):
         with open("config.json", "r", encoding="utf-8") as config_fp:
@@ -64,6 +67,9 @@ class ConfigReader:
         self.explicit_search_protection_on = config_file["explicit_search_protection"]
         self.weeb_channel_id = config_file["misc_ids"]["weeb_channel_id"]
         self.maymay_channel_id = config_file["misc_ids"]["maymay_channel_id"]
+        self.initial_managed_channel = config_file["misc_ids"]["initial_managed_channel"]
+        self.max_managed_channels = config_file["bot"]["max_managed_voice_channels"]
+        self.managed_channels_category = config_file["misc_ids"]["managed_channels_category"]
 
     def regen_config(self):
         shutil.copyfile(self.run_root+"default_config.json", self.run_root+"config.json")
