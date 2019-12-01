@@ -51,7 +51,7 @@ class WeebCog(commands.Cog):
         asyncio.create_task(self.mal_rate_limit_down_counter())
 
     def cog_unload(self):
-        self.jikan_aio.close()
+        asyncio.run(self.jikan_aio.close())
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user=None):
