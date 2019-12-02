@@ -33,15 +33,20 @@ class ChannelManagerCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        # Filter out deaf/mutes
-        if before.channel.id == after.channel.id:
-            return
-        # Filter out cases where channels of reference are both not under bot management:
-        if before.channel.id not in self.managed_channels_list and \
-                after.channel.id not in self.managed_channels_list:
-            return
+        try:
+            # Filter out deaf/mutes
+            if before.channel.id == after.channel.id:
+                return
+            # Filter out cases where channels of reference are both not under bot management:
+            if before.channel.id not in self.managed_channels_list and \
+                    after.channel.id not in self.managed_channels_list:
+                return
+        except AttributeError:
+            pass
 
-        await self.check_managed_channels()
+        if (before is None and after is not None) or (before is not None and after is None) or \
+            (before is not None and after is not None):
+            await self.check_managed_channels()
 
     async def check_managed_channels(self):
         # Iterate through all managed channels except the persistent base channel,
@@ -54,9 +59,9 @@ class ChannelManagerCog(commands.Cog):
         # Check to see if a channel in the middle of the list is empty
         for channel_obj in channel_obj_list[1:-1]:
             if not channel_obj.members:
-                self.logger.debug("Deleted channel")
                 del self.managed_channels_list[channel_obj_list.index(channel_obj)]
-                await channel_obj.delete(reason="Automatic channel deletion.")
+                await channel_obj.delete()
+                self.logger.debug("Deleted channel")
                 # Run this method again to shuffle channels to correct their names
                 await self.check_managed_channels()
                 return
@@ -68,10 +73,10 @@ class ChannelManagerCog(commands.Cog):
                 return
             new_channel_position = channel_obj_list[-1].position + 1
             new_channel_obj = await channel_obj_list[-1].clone(
-                name=f"The {num2words(len(self.managed_channels_list), to='ordinal', lang='en').capitalize()} Call",
-                reason="Automatic channel creation.")
+                name=f"The {num2words(len(self.managed_channels_list), to='ordinal', lang='en').capitalize()} Call")
             self.managed_channels_list.append(new_channel_obj.id)
             await new_channel_obj.edit(position=new_channel_position)
+            self.logger.debug("Created channel")
             await self.check_managed_channels()
             return
 
@@ -85,8 +90,10 @@ class ChannelManagerCog(commands.Cog):
             true_channel_ordinal = num2words(index + 1, to="ordinal", lang="en").capitalize()
             if ordinal_in_chan_name.lower() != true_channel_ordinal.lower():
                 await current_channel.edit(name=f"The {true_channel_ordinal} Call")
+                self.logger.debug("Renamed channel")
             if index + channel_obj_list[0].position != current_channel.position:
                 await current_channel.edit(position=(index + channel_obj_list[0].position))
+                self.logger.debug("Changed channel position")
                 await self.check_managed_channels()
                 return
 
