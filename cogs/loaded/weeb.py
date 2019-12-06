@@ -288,7 +288,7 @@ class WeebCog(commands.Cog):
 
         item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
                               icon_url="https://i.imgur.com/fSPtnoP.png")
-        item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/5zaQwWr.jpg",
+        item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://i.imgur.com/B5OZTkB.png",
                               url="https://github.com/Pytato/GCHQBot")
         if found_image:
             item_embed.set_thumbnail(url=new_img_url)
