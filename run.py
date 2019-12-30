@@ -20,6 +20,9 @@ bot = commands.Bot(command_prefix="placeholder_bot")
 async def _time_check():
     """Background deadline/task checking loop that is meant to sit on the main event loop"""
     global british_timezone
+    global non_blue_role_user_id_list
+    global blue_role_id_list
+
     while True:
         try:
             british_timezone = pytz.timezone('Europe/London')
@@ -42,7 +45,35 @@ async def _time_check():
                     del glob_deadline_dict[deadline]
         except Exception as e:
             logger.exception(e)
-        await asyncio.sleep(30)
+
+        main_guild = bot.get_guild(CONFIG_VAR.main_guild_id)
+        anti_raid_role = main_guild.get_role(CONFIG_VAR.anti_raid_role_id)
+        remove_from_non_blue_role_list = []
+
+        for non_blue_role_user in non_blue_role_user_id_list:
+            user_obj = main_guild.get_member(non_blue_role_user)
+            if user_obj is not None:
+                if await _member_obj_has_no_blue_roles(user_obj, blue_role_id_list):
+                    pass
+                else:
+                    remove_from_non_blue_role_list.append(non_blue_role_user)
+                    await user_obj.add_roles(anti_raid_role)
+                    logger.info(f"Verified user: {user_obj.name}, id: {user_obj.id}")
+
+        for verified_user_id in remove_from_non_blue_role_list:
+            non_blue_role_user_id_list.pop(verified_user_id)
+
+        await asyncio.sleep(60)
+
+
+async def _member_obj_has_no_blue_roles(member_object, blue_role_id_list_loc):
+    member_has_blue_role = False
+    for member_role in member_object.roles:
+        if member_role.id in blue_role_id_list_loc:
+            member_has_blue_role = True
+            break
+    # I wrote this late at night, the function tests for the inverse of its return ¯\_(ツ)_/¯
+    return not member_has_blue_role
 
 
 async def _add_deadline(datetime_obj, task: str, coro=False, use_file=True):
@@ -166,13 +197,19 @@ async def on_ready():
     global upvote_emoji_obj
     global downvote_emoji_obj
     global author_object
+    global non_blue_role_user_id_list
+    global blue_role
 
     # Any crap that needs to be done on startup can go here.
     author_object = bot.get_user(CONFIG_VAR.owner_id)
     upvote_emoji_obj = discord.utils.get(bot.emojis, id=upvote_id)
     downvote_emoji_obj = discord.utils.get(bot.emojis, id=downvote_id)
-    logger.info("Bot process ready, running autism score checks and generating deadline tasks.")
-
+    main_guild = bot.get_guild(CONFIG_VAR.main_guild_id)
+    await _generate_blue_role_list(main_guild)
+    logger.info("Bot process connected, running background tasks.")
+    for member_obj in main_guild.members:
+        if await _member_obj_has_no_blue_roles(member_obj, blue_role_id_list):
+            non_blue_role_user_id_list.append(member_obj.id)
     if not os.path.exists("./deadlines/deadline.json"):
         with open("./deadlines/deadline.json", "w") as temp_json_create_fp:
             json.dump({}, temp_json_create_fp)
@@ -180,6 +217,30 @@ async def on_ready():
         deadline_json_loaded = json.load(deadline_json_fp)
     for task_datetime, task_package in deadline_json_loaded.items():
         await _add_deadline(task_datetime, task_package[0], coro=task_package[1], use_file=False)
+
+    main_guild = bot.get_guild(CONFIG_VAR.main_guild_id)
+    anti_raid_role = main_guild.get_role(CONFIG_VAR.anti_raid_role_id)
+    remove_from_non_blue_role_list = []
+
+    for guild_member in main_guild.members:
+        user_obj = guild_member
+        if user_obj is not None:
+            if await _member_obj_has_no_blue_roles(user_obj, blue_role_id_list):
+                try:
+                    await user_obj.remove_roles(anti_raid_role)
+                except discord.Forbidden:
+                    pass
+                except discord.HTTPException:
+                    pass
+            else:
+                if anti_raid_role not in guild_member.roles:
+                    await user_obj.add_roles(anti_raid_role)
+                    remove_from_non_blue_role_list.append(guild_member.id)
+                    logger.info(f"Verified user: {user_obj.name}, id: {user_obj.id}")
+
+    for verified_user_id in remove_from_non_blue_role_list:
+        non_blue_role_user_id_list.remove(verified_user_id)
+
     logger.info("Welcome to GCHQ Bot, for all your data harvesting needs.")
 
 
@@ -235,6 +296,7 @@ async def on_message(received_message):
 
 @bot.event
 async def on_member_join(member):
+    global non_blue_role_user_id_list
     logger.info("{} has joined the server.".format(member))
     await member.send('Welcome to GCHQ, this bot will provide commands allowing you to gain access '
                       'to hidden text channels in the GCHQ server, use `{0}help` to see '
@@ -245,6 +307,8 @@ async def on_member_join(member):
     pingrole_obj = discord.utils.get(member.guild.roles, name="Pingrole")
     await asyncio.sleep(600)  # The server this bot is used on has a wait period before talking.
     await member.add_roles(pingrole_obj, reason="New members automatically get Pingrole")
+    if member.id not in non_blue_role_user_id_list:
+        non_blue_role_user_id_list.append(member.id)
     logger.info("Successfully messaged and added new user to Pingrole.")
 
 
@@ -654,6 +718,7 @@ if __name__ == "__main__":
     current_mal_req_count_ps = 0
     current_mal_req_count_pm = 0
     vote_file_queue = []
+    non_blue_role_user_id_list = []
 
     colour_list = ["purple", "blue", "green", "yellow", "orange", "red", "irradiated_green"]
 
