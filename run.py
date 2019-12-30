@@ -249,6 +249,12 @@ async def on_message(received_message):
     global current_mal_req_count_pm
     global current_mal_req_count_ps
 
+    banned_word_list = ["amouranth", "alinity", "https://bit.ly/2Pn0xNV"]
+
+    for banned_word in banned_word_list:
+        if banned_word in received_message.content:
+            await received_message.delete()
+
     if received_message.channel.id == CONFIG_VAR.maymay_channel_id:
         # Upvote downvote BS
         if (re.search(url_regex, received_message.content) is not None) or \
