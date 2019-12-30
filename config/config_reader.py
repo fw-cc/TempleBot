@@ -21,8 +21,8 @@ class ConfigReader:
                 self.regen_config()
             except FileNotFoundError:
                 logger.critical("No ./config/default_config.json file exists.")
-                input()
-                sys.exit(-1)
+            input()
+            sys.exit(-1)
 
         self.b_token = config_file["bot"]["token"]
         self.owner_id = config_file["bot"]["owner_id"]
@@ -45,6 +45,7 @@ class ConfigReader:
         self.initial_managed_channel = config_file["misc_ids"]["initial_managed_channel"]
         self.max_managed_channels = config_file["bot"]["max_managed_voice_channels"]
         self.managed_channels_category = config_file["misc_ids"]["managed_channels_category"]
+        self.anti_raid_role_id = config_file["misc_ids"]["anti_raid_role_id"]
 
     def refresh_config(self):
         with open("config.json", "r", encoding="utf-8") as config_fp:
@@ -70,6 +71,7 @@ class ConfigReader:
         self.initial_managed_channel = config_file["misc_ids"]["initial_managed_channel"]
         self.max_managed_channels = config_file["bot"]["max_managed_voice_channels"]
         self.managed_channels_category = config_file["misc_ids"]["managed_channels_category"]
+        self.anti_raid_role_id = config_file["misc_ids"]["anti_raid_role_id"]
 
     def regen_config(self):
         shutil.copyfile(self.run_root+"default_config.json", self.run_root+"config.json")

@@ -18,7 +18,8 @@
         "autism_role_id": 0,
         "maymay_channel_id": 0,
         "initial_managed_channel": 0,
-        "managed_channels_category": 0
+        "managed_channels_category": 0,
+        "anti_raid_role_id": 0
     },
 
     "role_table": {},
