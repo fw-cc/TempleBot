@@ -47,6 +47,7 @@ async def _time_check():
             logger.exception(e)
 
         main_guild = bot.get_guild(CONFIG_VAR.main_guild_id)
+        await _generate_blue_role_list(main_guild)
         anti_raid_role = main_guild.get_role(CONFIG_VAR.anti_raid_role_id)
         remove_from_non_blue_role_list = []
 
