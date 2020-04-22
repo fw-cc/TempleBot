@@ -15,6 +15,7 @@ services:
       - ./base_config.yml:/gchqbot/base_config.yml
       - ./token.example.yml:/gchqbot/token.example.yml
       - ./token.yml:/gchqbot/token.yml
+
   mongod:
     image: mongo
     restart: always
