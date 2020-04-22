@@ -1,0 +1,7 @@
+# This config is loaded into the mongodb database for persistence, changes here will propagate to the database
+# after restarts.
+admin_ids: []
+owner_id: 0
+command_prefix: "££"
+verification_role_ids: []
+max_managed_voice_channels: 5
