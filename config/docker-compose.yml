@@ -6,18 +6,25 @@ services:
     restart: always
     depends_on:
       - mongod
+    environment:
+      - MONGOD_UNAME=docker
+      - MONGOD_UPASS=docker
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - ./base_config.yml:/gchqbot/base_config.yml
       - ./token.yml:/gchqbot/token.yml
   mongod:
-    image: "mongo:4.2-bionic"
+    image: mongo
+    restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=docker
+      - MONGO_INITDB_ROOT_PASSWORD=docker
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
   watchtower:
       image: "containrrr/watchtower"
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
-        - /root/.docker/config.json:/config.json
-      command: --interval 300 --label-enable --cleanup
+        - C:/Users/ffill/.docker/config.json:/config.json
+      command: --interval 30 --label-enable --cleanup
