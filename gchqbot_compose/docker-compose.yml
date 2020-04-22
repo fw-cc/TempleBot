@@ -2,7 +2,7 @@ version: "3"
 
 services:
   bot:
-    image: "pytato/gchqbot:latest"
+    image: "pytato/gchqbot:dev"
     restart: always
     depends_on:
       - mongod
