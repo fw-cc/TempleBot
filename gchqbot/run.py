@@ -8,7 +8,7 @@ if __name__ == "__main__":
     with open("./base_config.yml", "r") as base_config:
         config_values = yaml.safe_load(base_config)
     if not os.path.exists("./token.yml:"):
-        shutil.copyfile("./token.example.yml", "token.yml")
+        shutil.copyfile("./token.example.yml", "./token.yml")
         print("Define token before running")
         input()
         exit(-1)
