@@ -19,7 +19,8 @@ class SanicVerificationCog(commands.Cog):
     async def on_ready(self):
         ssl_placeholder = {"cert": "", "key": ""}
         await self.app.create_server(port=8000,
-                                     ssl=None)
+                                     ssl=None,
+                                     return_asyncio_server=True)
 
 
 def setup(bot):
