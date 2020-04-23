@@ -23,4 +23,4 @@ class SanicVerificationCog(commands.Cog):
 
 
 def setup(bot):
-    bot.add_cog(bot)
+    bot.add_cog(SanicVerificationCog(bot))
