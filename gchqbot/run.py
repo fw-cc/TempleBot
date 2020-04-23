@@ -1,4 +1,5 @@
 from gchqbot import GCHQBot
+
 import yaml
 import os
 import shutil

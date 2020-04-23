@@ -6,3 +6,6 @@ owner_id: 0
 command_prefix: "££"
 verification_role_ids: []
 max_managed_voice_channels: 5
+extensions:
+  # - "extensions.bot_utils"
+  - "extensions.sanic_server"

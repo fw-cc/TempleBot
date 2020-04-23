@@ -9,13 +9,26 @@ services:
     environment:
       - MONGOD_UNAME=docker
       - MONGOD_UPASS=docker
+    ports:
+      - "8443:443"
+      - "8000:80"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - ./base_config.yml:/gchqbot/base_config.yml
       - ./token.example.yml:/gchqbot/token.example.yml
       - ./token.yml:/gchqbot/token.yml
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
 
+#  certbot:
+#    image: certbot/certbot
+#    depends_on:
+#      - bot
+#    volumes:
+#      - ./data/certbot/conf:/etc/letsencrypt
+#      - ./data/certbot/www:/var/www/certbot
+#    command: "certonly"
   mongod:
     image: mongo
     restart: always
@@ -24,6 +37,7 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=docker
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+
   watchtower:
       image: "containrrr/watchtower"
       volumes:
