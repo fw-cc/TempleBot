@@ -3,10 +3,11 @@
 admin_ids: []
 logging_level: "DEBUG"
 owner_id: 0
-command_prefix: "££"
+command_prefix: "gchq."
 verification_role_ids: []
 max_managed_voice_channels: 5
+verification_domain: "https://verify.coldcurry.net"
 extensions:
+  - "extensions.verification"
+  # - "extensions.db_setup"
   # - "extensions.bot_utils"
-  - "extensions.quart_server"
-  - "extensions.db_setup"
