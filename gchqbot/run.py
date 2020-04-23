@@ -13,9 +13,17 @@ if __name__ == "__main__":
         print("Define token before running")
         exit(-1)
     with open("./token.yml", "r") as token_file:
-        token = yaml.safe_load(token_file)["token"]
+        loaded_tokenfile = yaml.safe_load(token_file)
+        token = loaded_tokenfile["token"]
         if token == "":
             print("Define token before running")
             exit(-1)
-    bot = GCHQBot(config_values["command_prefix"], base_config_options=config_values)
+        captcha_pair = loaded_tokenfile["recaptchakeypair"]
+        if captcha_pair == {} or captcha_pair is None or captcha_pair["sitekey"] == "" or \
+                captcha_pair["privatekey"] == "":
+            print("Define captcha keypair before running")
+            exit(-1)
+    bot = GCHQBot(config_values["command_prefix"],
+                  base_config_options=config_values,
+                  captcha_keypair=captcha_pair)
     bot.run(token)
