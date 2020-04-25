@@ -1,0 +1,13 @@
+<html lang="html5">
+<head>
+    <title>GCHQBot Verification</title>
+</head>
+<body style="background-color:black; color:slategray">
+    <h2>GCHQBot Account Verification:</h2>
+    <form method="POST" action="{{ url_for('handle_verification', verif_id=verif_uuid) }}">
+        {{ form.csrf_token }}
+        {{ form.recaptcha }}
+        <input type="submit" value="Verify Humanity">
+    </form>
+</body>
+</html>
