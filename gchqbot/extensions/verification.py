@@ -3,7 +3,7 @@ import quart.flask_patch
 from flask_wtf import FlaskForm, RecaptchaField
 from discord.ext import commands
 from quart import Quart, render_template, Response, static
-# from secure import SecureHeaders
+from secure import SecureHeaders
 
 import discord
 
@@ -91,7 +91,7 @@ class WebVerificationCog(commands.Cog):
             self.has_called_webserver = True
 
     async def run_server(self):
-        # secure_headers = SecureHeaders()
+        secure_headers = SecureHeaders()
         # redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
         # app = redir_obj.app
         app = Quart(__name__)
@@ -159,7 +159,7 @@ class WebVerificationCog(commands.Cog):
         @app.after_request
         async def apply_secure_headers(response):
             """Applies security headers"""
-            # secure_headers.quart(response)
+            secure_headers.quart(response)
             return response
 
 
