@@ -154,7 +154,7 @@ class WebVerificationCog(commands.Cog):
             """Used for SSL challenge"""
             web_root = self.bot.config_data["base"]["webroot_path"]+".well-known/acme-challenge/"
             # challenge_route = static.safe_join(web_root, file_name)
-            return static.send_from_directory(web_root, file_name)
+            return await static.send_from_directory(web_root, file_name)
 
         @app.after_request
         async def apply_secure_headers(response):
