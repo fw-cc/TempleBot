@@ -94,7 +94,9 @@ class WebVerificationCog(commands.Cog):
         db_client = self.db_client
         event_loop = asyncio.get_event_loop()
         config_data = self.bot.config_data
-        app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
+        if self.bot.config_data["base"]["verification_domain"] != "":
+            app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
+            app.config["SUBDOMAIN"] = self.bot.config_data["base"]["verification_subdomain"]
         app.config["SECRET_KEY"] = config_data["base"]["webserver_secret_session_key"]
         app.config["RECAPTCHA_USE_SSL"] = False
         app.config['RECAPTCHA_PUBLIC_KEY'] = config_data["captcha"]["sitekey"]
@@ -103,12 +105,14 @@ class WebVerificationCog(commands.Cog):
         configuration = asyncio_hypercorn.Config().from_mapping({
             "host": self.bot.config_data["base"]["verification_domain"],
             "port": 443,
-            "subdomain": "verify",
+            "subdomain": self.bot.config_data["base"]["verification_subdomain"],
             "insecure_bind": "localhost:80",
             "certfile": "./cert.pem",
-            "keyfile": "./key.pem"
+            "keyfile": "./key.pem",
+            "secret_key": config_data["base"]["webserver_secret_session_key"]
         })
         event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
+        # event_loop.create_task(asyncio_hypercorn.serve(app, configuration))
 
         class VerifyForm(FlaskForm):
             recaptcha = RecaptchaField()
