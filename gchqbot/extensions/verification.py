@@ -102,13 +102,13 @@ class WebVerificationCog(commands.Cog):
         #     app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
         #     app.config["SUBDOMAIN"] = self.bot.config_data["base"]["verification_subdomain"]
         app.config["SECRET_KEY"] = config_data["base"]["webserver_secret_session_key"]
-        # app.config["RECAPTCHA_USE_SSL"] = False
+        app.config["RECAPTCHA_USE_SSL"] = True
         app.config['RECAPTCHA_PUBLIC_KEY'] = config_data["captcha"]["sitekey"]
         app.config['RECAPTCHA_PRIVATE_KEY'] = config_data["captcha"]["privatekey"]
         app.config['RECAPTCHA_DATA_ATTRS'] = {"theme": 'dark'}
         configuration = asyncio_hypercorn.Config().from_mapping({
             "host": self.bot.config_data["base"]["verification_domain"],
-            # "port": 443,
+            "port": 8000,
             # "subdomain": self.bot.config_data["base"]["verification_subdomain"],
             # "insecure_bind": "localhost:80",
             # "certfile": "./cert.pem",
