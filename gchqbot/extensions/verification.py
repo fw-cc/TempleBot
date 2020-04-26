@@ -92,14 +92,14 @@ class WebVerificationCog(commands.Cog):
 
     async def run_server(self):
         secure_headers = SecureHeaders()
-        # redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
-        # app = redir_obj.app
-        app = Quart(__name__)
+        redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
+        app = redir_obj.app
+        # app = Quart(__name__)
         db_client = self.db_client
         event_loop = asyncio.get_event_loop()
         config_data = self.bot.config_data
-        # if self.bot.config_data["base"]["verification_domain"] != "":
-        #     app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
+        if self.bot.config_data["base"]["verification_domain"] != "":
+            app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
         #     app.config["SUBDOMAIN"] = self.bot.config_data["base"]["verification_subdomain"]
         app.config["SECRET_KEY"] = config_data["base"]["webserver_secret_session_key"]
         # app.config["RECAPTCHA_USE_SSL"] = False
@@ -108,16 +108,16 @@ class WebVerificationCog(commands.Cog):
         app.config['RECAPTCHA_DATA_ATTRS'] = {"theme": 'dark'}
         configuration = asyncio_hypercorn.Config().from_mapping({
             "host": self.bot.config_data["base"]["verification_domain"],
-            # "port": 443,
+            "port": 443,
             # "subdomain": self.bot.config_data["base"]["verification_subdomain"],
-            # "insecure_bind": "localhost:80",
-            # "certfile": "./cert.pem",
-            # "keyfile": "./key.pem",
+            "insecure_bind": "localhost:8000",
+            "certfile": "./cert.pem",
+            "keyfile": "./key.pem",
             "use_reloader": True,
             "secret_key": config_data["base"]["webserver_secret_session_key"]
         })
-        # event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
-        event_loop.create_task(asyncio_hypercorn.serve(app, configuration))
+        event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
+        # event_loop.create_task(asyncio_hypercorn.serve(app, configuration))
 
         class VerifyForm(FlaskForm):
             recaptcha = RecaptchaField()
