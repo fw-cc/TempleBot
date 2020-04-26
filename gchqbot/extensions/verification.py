@@ -113,6 +113,7 @@ class WebVerificationCog(commands.Cog):
             # "insecure_bind": "localhost:80",
             # "certfile": "./cert.pem",
             # "keyfile": "./key.pem",
+            "use_reloader": True,
             "secret_key": config_data["base"]["webserver_secret_session_key"]
         })
         # event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
