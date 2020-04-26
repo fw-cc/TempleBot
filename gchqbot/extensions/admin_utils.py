@@ -12,3 +12,7 @@ class AdminUtils(commands.Cog):
     @commands.is_owner()
     async def shutdown(self):
         await self.bot.close()
+
+
+def setup(bot):
+    bot.add_cog(AdminUtils(bot))
