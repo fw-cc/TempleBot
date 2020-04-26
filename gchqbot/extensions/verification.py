@@ -92,31 +92,31 @@ class WebVerificationCog(commands.Cog):
 
     async def run_server(self):
         secure_headers = SecureHeaders()
-        redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
-        app = redir_obj.app
-        # app = Quart(__name__)
+        # redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
+        # app = redir_obj.app
+        app = Quart(__name__)
         db_client = self.db_client
         event_loop = asyncio.get_event_loop()
         config_data = self.bot.config_data
-        if self.bot.config_data["base"]["verification_domain"] != "":
-            app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
-            app.config["SUBDOMAIN"] = self.bot.config_data["base"]["verification_subdomain"]
+        # if self.bot.config_data["base"]["verification_domain"] != "":
+        #     app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
+        #     app.config["SUBDOMAIN"] = self.bot.config_data["base"]["verification_subdomain"]
         app.config["SECRET_KEY"] = config_data["base"]["webserver_secret_session_key"]
-        app.config["RECAPTCHA_USE_SSL"] = False
+        # app.config["RECAPTCHA_USE_SSL"] = False
         app.config['RECAPTCHA_PUBLIC_KEY'] = config_data["captcha"]["sitekey"]
         app.config['RECAPTCHA_PRIVATE_KEY'] = config_data["captcha"]["privatekey"]
         app.config['RECAPTCHA_DATA_ATTRS'] = {"theme": 'dark'}
         configuration = asyncio_hypercorn.Config().from_mapping({
             "host": self.bot.config_data["base"]["verification_domain"],
-            "port": 443,
-            "subdomain": self.bot.config_data["base"]["verification_subdomain"],
-            "insecure_bind": "localhost:80",
-            "certfile": "./cert.pem",
-            "keyfile": "./key.pem",
+            # "port": 443,
+            # "subdomain": self.bot.config_data["base"]["verification_subdomain"],
+            # "insecure_bind": "localhost:80",
+            # "certfile": "./cert.pem",
+            # "keyfile": "./key.pem",
             "secret_key": config_data["base"]["webserver_secret_session_key"]
         })
-        event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
-        # event_loop.create_task(asyncio_hypercorn.serve(app, configuration))
+        # event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
+        event_loop.create_task(asyncio_hypercorn.serve(app, configuration))
 
         class VerifyForm(FlaskForm):
             recaptcha = RecaptchaField()
