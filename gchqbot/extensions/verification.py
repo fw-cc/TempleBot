@@ -1,19 +1,18 @@
 import quart.flask_patch
 
 from flask_wtf import FlaskForm, RecaptchaField
-from wtforms import validators
 from discord.ext import commands
-from quart import Quart, render_template, Response, g
+from quart import Quart, render_template, Response, static
+from secure import SecureHeaders
 
 import discord
 
 import logging
 import asyncio
-import os
 import uuid
 
 from quart import Quart, Response, abort
-import hypercorn.asyncio
+from hypercorn import asyncio as asyncio_hypercorn, middleware as middleware_hypercorn
 
 
 class WebVerificationCog(commands.Cog):
@@ -88,20 +87,28 @@ class WebVerificationCog(commands.Cog):
             self.has_called_webserver = True
 
     async def run_server(self):
-        app = Quart(__name__)
+        secure_headers = SecureHeaders()
+        redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
+        app = redir_obj.app
+        # app = Quart(__name__)
         db_client = self.db_client
         event_loop = asyncio.get_event_loop()
         config_data = self.bot.config_data
+        app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
         app.config["SECRET_KEY"] = config_data["base"]["webserver_secret_session_key"]
         app.config["RECAPTCHA_USE_SSL"] = False
         app.config['RECAPTCHA_PUBLIC_KEY'] = config_data["captcha"]["sitekey"]
         app.config['RECAPTCHA_PRIVATE_KEY'] = config_data["captcha"]["privatekey"]
         app.config['RECAPTCHA_DATA_ATTRS'] = {"theme": 'dark'}
-        configuration = hypercorn.Config().from_mapping({
-            "host": "localhost",
-            "port": 5000
+        configuration = asyncio_hypercorn.Config().from_mapping({
+            "host": self.bot.config_data["base"]["verification_domain"],
+            "port": 443,
+            "subdomain": "verify",
+            "insecure_bind": "localhost:80",
+            "certfile": "./cert.pem",
+            "keyfile": "./key.pem"
         })
-        event_loop.create_task(hypercorn.asyncio.serve(app, configuration))
+        event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
 
         class VerifyForm(FlaskForm):
             recaptcha = RecaptchaField()
@@ -112,6 +119,12 @@ class WebVerificationCog(commands.Cog):
 
         @app.route("/<uuid:verif_id>", methods=["GET", "POST"])
         async def handle_verification(verif_id):
+            """Verification page that contains a recaptcha "form" where users must verify their humanity
+            in order to gain access to the server.
+
+            Page will 404 with an improper uuid, or a uuid that has already been verified.
+
+            Needs rate limiting to mitigate crash attempts."""
             verif_form = VerifyForm()
 
             if verif_form.validate_on_submit():
@@ -127,6 +140,19 @@ class WebVerificationCog(commands.Cog):
 
             # Now we have a valid user record, let's use our verification page template to help them verify
             return await render_template("verification.html", form=verif_form, verif_uuid=verif_id)
+
+        @app.route("/.well-known/acme-challenge/<string:file_name>")
+        async def acme_challenge_route(file_name):
+            """Used for SSL challenge"""
+            web_root = self.bot.config_data["base"]["webroot_path"]+".well-known/acme-challenge/"
+            # challenge_route = static.safe_join(web_root, file_name)
+            return static.send_from_directory(web_root, file_name)
+
+        @app.after_request
+        async def apply_secure_headers(response):
+            """Applies security headers"""
+            secure_headers.quart(response)
+            return response
 
 
 def setup(bot):
