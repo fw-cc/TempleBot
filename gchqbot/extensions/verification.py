@@ -24,11 +24,12 @@ class WebVerificationCog(commands.Cog):
         self.captcha_keys = self.bot.recaptcha_keypair
 
     @commands.command()
+    @commands.is_owner()
     async def test_add_member(self, ctx):
         self.logger.debug("Test member command called")
-        await self.__on_member_join_internal(ctx.author, force_remind=True)
+        await self.__on_member_join_internal(ctx.author, force_remind=True, force_reverif=True)
 
-    async def __on_member_join_internal(self, member, force_remind=False):
+    async def __on_member_join_internal(self, member, force_remind=False, force_reverif=False):
         db = self.db_client.gchqbot
         collection = db.members
         member_record = await collection.find_one(
@@ -54,6 +55,9 @@ class WebVerificationCog(commands.Cog):
         if remind_verification or force_remind:
             await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
                               f"following URL: {self.bot.verification_domain}/{member_uuid}")
+        elif force_reverif:
+            member_record.verified = False
+            await collection.update_one({"uuid": str(member_uuid)}, {"$set": {"verified": False}})
         else:
             await self.__repatriate_member(member, member_record)
 
