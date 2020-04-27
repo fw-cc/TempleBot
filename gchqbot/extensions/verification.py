@@ -19,6 +19,7 @@ class WebVerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logging.getLogger("GCHQBot.Verification")
+        self.verification_role_hash_table = {}
         self.db_client = None
         self.has_called_webserver = False
         self.captcha_keys = self.bot.recaptcha_keypair
@@ -65,6 +66,11 @@ class WebVerificationCog(commands.Cog):
 
     async def verify_member(self, member_uuid):
         self.logger.info(f"UUID {member_uuid} passed the verification test.")
+        member_record = await self.db_client.gchqbot.members.find_one({"uuid": str(member_uuid)})
+        guild_obj = self.bot.get_guild(member_record["guild_id"])
+        role_obj = guild_obj.get_role(self.verification_role_hash_table[str(guild_obj.id)])
+        member_obj = guild_obj.get_member(member_record["user_id"])
+        await member_obj.add_roles(role_obj, reason="User verified")
         await self.db_client.gchqbot.members.update_one(
             {"uuid": str(member_uuid)},
             {"$set": {"verified": True}}
@@ -91,6 +97,16 @@ class WebVerificationCog(commands.Cog):
                 await asyncio.sleep(0.25)
             await self.run_server()
             self.has_called_webserver = True
+
+        for verification_role in self.bot.config_data["base"]["verification_role_ids"]:
+            guild_id, role_id = verification_role.split(":")
+            guild_obj = self.bot.get_guild(int(guild_id))
+            if guild_obj is None:
+                self.logger.warning(f"Guild id: {guild_id} defined in config not found")
+            role_obj = guild_obj.get_role(int(role_id))
+            if role_obj is None:
+                self.logger.warning(f"Role id: {role_id} defined in config not found")
+            self.verification_role_hash_table[guild_id] = int(role_id)
 
     async def run_server(self):
         secure_headers = SecureHeaders()
