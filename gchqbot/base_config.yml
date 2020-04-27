@@ -12,9 +12,10 @@ verification_role_ids:
   # - guild_id:role_id
   - "192291925326299137:602532197882265621"
 max_managed_voice_channels: 5
+# This is now entirely cosmetic
 verification_domain: ""
-verification_subdomain: ""
 extensions:
   - "extensions.verification"
   - "extensions.db_setup"
+  - "extensions.admin_utils"
   # - "extensions.bot_utils"
