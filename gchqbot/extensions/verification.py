@@ -51,7 +51,7 @@ class WebVerificationCog(commands.Cog):
             member_uuid = member_record["uuid"]
         elif force_reverif:
             new_member_uuid = uuid.uuid4()
-            await collection.update_one({"uuid": str(member_uuid)},
+            await collection.update_one({"user_id": member.id, "guild_id": member.guild.id},
                                         {"$set": {"verified": False, "uuid": str(new_member_uuid)}})
             member_uuid = new_member_uuid
         else:
