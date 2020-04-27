@@ -12,7 +12,7 @@ import asyncio
 import uuid
 
 from quart import Quart, Response, abort
-from hypercorn import asyncio as asyncio_hypercorn, middleware as middleware_hypercorn
+from hypercorn import asyncio as asyncio_hypercorn
 
 
 class WebVerificationCog(commands.Cog):
@@ -93,15 +93,10 @@ class WebVerificationCog(commands.Cog):
 
     async def run_server(self):
         secure_headers = SecureHeaders()
-        # redir_obj = middleware_hypercorn.HTTPToHTTPSRedirectMiddleware(Quart(__name__), "localhost:8000")
-        # app = redir_obj.app
         app = Quart(__name__)
         db_client = self.db_client
         event_loop = asyncio.get_event_loop()
         config_data = self.bot.config_data
-        # if self.bot.config_data["base"]["verification_domain"] != "":
-        #     app.config["SERVER_NAME"] = self.bot.config_data["base"]["verification_domain"]
-        #     app.config["SUBDOMAIN"] = self.bot.config_data["base"]["verification_subdomain"]
         app.config["SECRET_KEY"] = config_data["base"]["webserver_secret_session_key"]
         app.config["RECAPTCHA_USE_SSL"] = True
         app.config['RECAPTCHA_PUBLIC_KEY'] = config_data["captcha"]["sitekey"]
@@ -110,14 +105,9 @@ class WebVerificationCog(commands.Cog):
         configuration = asyncio_hypercorn.Config().from_mapping({
             "host": self.bot.config_data["base"]["verification_domain"],
             "port": 8000,
-            # "subdomain": self.bot.config_data["base"]["verification_subdomain"],
-            # "insecure_bind": "localhost:80",
-            # "certfile": "./cert.pem",
-            # "keyfile": "./key.pem",
             "use_reloader": True,
             "secret_key": config_data["base"]["webserver_secret_session_key"]
         })
-        # event_loop.create_task(asyncio_hypercorn.serve(redir_obj, configuration))
         event_loop.create_task(asyncio_hypercorn.serve(app, configuration))
 
         class VerifyForm(FlaskForm):
@@ -150,13 +140,6 @@ class WebVerificationCog(commands.Cog):
 
             # Now we have a valid user record, let's use our verification page template to help them verify
             return await render_template("verification.html", form=verif_form, verif_uuid=verif_id)
-
-        @app.route("/.well-known/acme-challenge/<string:file_name>")
-        async def acme_challenge_route(file_name):
-            """Used for SSL challenge"""
-            web_root = self.bot.config_data["base"]["webroot_path"]+".well-known/acme-challenge/"
-            # challenge_route = static.safe_join(web_root, file_name)
-            return await static.send_from_directory(web_root, file_name)
 
         @app.after_request
         async def apply_secure_headers(response):
