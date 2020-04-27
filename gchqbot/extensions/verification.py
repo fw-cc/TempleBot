@@ -57,10 +57,11 @@ class WebVerificationCog(commands.Cog):
         if remind_verification or force_remind:
             await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
                               f"following URL: {self.bot.verification_domain}/{member_uuid}")
-        elif force_reverif:
-            await collection.update_one({"uuid": str(member_uuid)}, {"$set": {"verified": False}})
         else:
             await self.__repatriate_member(member, member_record)
+
+        if force_reverif:
+            await collection.update_one({"uuid": str(member_uuid)}, {"$set": {"verified": False}})
 
     async def verify_member(self, member_uuid):
         self.logger.info(f"UUID {member_uuid} passed the verification test.")
