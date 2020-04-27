@@ -50,7 +50,9 @@ class WebVerificationCog(commands.Cog):
         elif member_record["verified"] is False:
             member_uuid = member_record["uuid"]
         elif force_reverif:
-            member_uuid = uuid.uuid4()
+            new_member_uuid = uuid.uuid4()
+            await collection.update_one({"uuid": str(member_uuid)},
+                                        {"$set": {"verified": False, "uuid": str(new_member_uuid)}})
         else:
             remind_verification = False
 
@@ -59,9 +61,6 @@ class WebVerificationCog(commands.Cog):
                               f"following URL: {self.bot.verification_domain}/{member_uuid}")
         else:
             await self.__repatriate_member(member, member_record)
-
-        if force_reverif:
-            await collection.update_one({"uuid": str(member_uuid)}, {"$set": {"verified": False}})
 
     async def verify_member(self, member_uuid):
         self.logger.info(f"UUID {member_uuid} passed the verification test.")
