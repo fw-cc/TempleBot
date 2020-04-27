@@ -11,6 +11,8 @@ import logging
 import asyncio
 import uuid
 
+from typing import Tuple
+
 from quart import Quart, Response, abort
 from hypercorn import asyncio as asyncio_hypercorn
 
@@ -64,13 +66,18 @@ class WebVerificationCog(commands.Cog):
         else:
             await self.__repatriate_member(member, member_record)
 
-    async def verify_member(self, member_uuid):
-        self.logger.info(f"UUID {member_uuid} passed the verification test.")
-        member_record = await self.db_client.gchqbot.members.find_one({"uuid": str(member_uuid)})
+    async def __member_verification_flow(self, member_record) -> Tuple[discord.Guild, discord.Member]:
         guild_obj = self.bot.get_guild(member_record["guild_id"])
         role_obj = guild_obj.get_role(self.verification_role_hash_table[str(guild_obj.id)])
         member_obj = guild_obj.get_member(member_record["user_id"])
         await member_obj.add_roles(role_obj, reason="User verified")
+        self.logger.debug(f"Verified {member_obj} in {guild_obj}")
+        return guild_obj, member_obj
+
+    async def verify_member(self, member_uuid):
+        self.logger.info(f"UUID {member_uuid} passed the verification test.")
+        member_record = await self.db_client.gchqbot.members.find_one({"uuid": str(member_uuid)})
+        guild_obj, member_obj = await self.__member_verification_flow(member_record)
         await self.db_client.gchqbot.members.update_one(
             {"uuid": str(member_uuid)},
             {"$set": {"verified": True}}
@@ -86,6 +93,8 @@ class WebVerificationCog(commands.Cog):
         """Internal function used to return roles owned by a member before they left the server back to them
         after they rejoin, based on the most recent backup in the Database."""
         self.logger.info(f"Repatriating member {member} on {member.guild}")
+        if record["verified"]:
+            await self.__member_verification_flow(record)
 
     @commands.Cog.listener()
     async def on_ready(self):
