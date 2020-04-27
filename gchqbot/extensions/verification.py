@@ -56,7 +56,6 @@ class WebVerificationCog(commands.Cog):
             await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
                               f"following URL: {self.bot.verification_domain}/{member_uuid}")
         elif force_reverif:
-            member_record.verified = False
             await collection.update_one({"uuid": str(member_uuid)}, {"$set": {"verified": False}})
         else:
             await self.__repatriate_member(member, member_record)
