@@ -75,6 +75,7 @@ class WebVerificationCog(commands.Cog):
             {"uuid": str(member_uuid)},
             {"$set": {"verified": True}}
         )
+        await member_obj.send(f"You have now been verified on {guild_obj}.")
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
