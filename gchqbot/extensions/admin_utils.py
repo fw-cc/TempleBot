@@ -10,7 +10,7 @@ class AdminUtils(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def shutdown(self):
+    async def shutdown(self, ctx):
         await self.bot.close()
 
 
