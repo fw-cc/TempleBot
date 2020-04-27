@@ -17,4 +17,5 @@ verification_subdomain: ""
 extensions:
   - "extensions.verification"
   - "extensions.db_setup"
+  - "extensions.admin_utils"
   # - "extensions.bot_utils"
