@@ -48,7 +48,7 @@ class WebVerificationCog(commands.Cog):
             }
             await collection.insert_one(member_record)
         elif member_record["verified"] is False:
-            member_uuid = member_record.uuid
+            member_uuid = member_record["uuid"]
         else:
             remind_verification = False
 
