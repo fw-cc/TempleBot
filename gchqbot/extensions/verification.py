@@ -53,6 +53,7 @@ class WebVerificationCog(commands.Cog):
             new_member_uuid = uuid.uuid4()
             await collection.update_one({"uuid": str(member_uuid)},
                                         {"$set": {"verified": False, "uuid": str(new_member_uuid)}})
+            member_uuid = new_member_uuid
         else:
             remind_verification = False
 
