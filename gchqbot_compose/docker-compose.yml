@@ -8,10 +8,9 @@ services:
       - "MONGOD_UNAME="
       - "MONGOD_UPASS="
     ports:
-      - "5000:5000"
-      - "80:80"
-    expose:
       - "27017"
+      - "80"
+      - "5000:5000"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
