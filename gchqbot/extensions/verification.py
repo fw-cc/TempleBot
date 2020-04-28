@@ -10,6 +10,7 @@ import discord
 import logging
 import asyncio
 import uuid
+from datetime import datetime, timedelta
 
 from typing import Tuple
 
@@ -22,6 +23,7 @@ class WebVerificationCog(commands.Cog):
         self.bot = bot
         self.logger = logging.getLogger("GCHQBot.Verification")
         self.verification_role_hash_table = {}
+        self.cached_owner_obj = (None, None)
         self.db_client = None
         self.has_called_webserver = False
         self.captcha_keys = self.bot.recaptcha_keypair
@@ -47,6 +49,7 @@ class WebVerificationCog(commands.Cog):
                 "user_id": member.id,
                 "guild_id": member.guild.id,
                 "roles": [],
+                "modifiers": [],
                 "verified": False
             }
             await collection.insert_one(member_record)
@@ -118,6 +121,21 @@ class WebVerificationCog(commands.Cog):
                 self.logger.warning(f"Role id: {role_id} defined in config not found")
             self.verification_role_hash_table[guild_id] = int(role_id)
 
+    def __cache_owner_object(self, owner_id):
+        cache_datetime, owner_obj = self.cached_owner_obj
+        new_cache_datetime = datetime.now()
+        requires_refresh = False
+        if cache_datetime is None:
+            requires_refresh = True
+        elif new_cache_datetime - cache_datetime > timedelta(minutes=15):
+            requires_refresh = True
+
+        if requires_refresh:
+            owner_obj = self.bot.get_user(owner_id)
+            self.cached_owner_obj = (new_cache_datetime, owner_obj)
+
+        return owner_obj
+
     async def run_server(self):
         secure_headers = SecureHeaders()
         app = Quart(__name__)
@@ -143,6 +161,13 @@ class WebVerificationCog(commands.Cog):
         @app.errorhandler(404)
         async def err_404_handler(error):
             return await render_template("not_found.html")
+
+        @app.route("/privacy", methods=["GET"])
+        async def return_privacy_statement():
+            """Returns a plain html privacy statement to the end user."""
+            owner_id = self.bot.config_data["base"]["owner_id"]
+            owner_name_str = str(self.__cache_owner_object(owner_id))
+            return await render_template("privacy_statement.html", owner_name=owner_name_str)
 
         @app.route("/<uuid:verif_id>", methods=["GET", "POST"])
         async def handle_verification(verif_id):
