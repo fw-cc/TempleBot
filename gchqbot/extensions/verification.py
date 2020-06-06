@@ -45,7 +45,7 @@ class WebVerificationCog(commands.Cog):
         if member_record is None:
             member_uuid = uuid.uuid4()
             member_record = {
-                "uuid": str(member_uuid),
+                "_id": str(member_uuid),
                 "user_id": member.id,
                 "guild_id": member.guild.id,
                 "roles": [],
@@ -54,12 +54,12 @@ class WebVerificationCog(commands.Cog):
             }
             await collection.insert_one(member_record)
         elif member_record["verified"] is False:
-            member_uuid = member_record["uuid"]
+            member_uuid = member_record["_id"]
         elif force_reverif:
-            new_member_uuid = uuid.uuid4()
+            member_uuid = member_record["_id"]
             await collection.update_one({"user_id": member.id, "guild_id": member.guild.id},
-                                        {"$set": {"verified": False, "uuid": str(new_member_uuid)}})
-            member_uuid = new_member_uuid
+                                        {"$set": {"verified": False}})
+            # member_uuid = new_member_uuid
         else:
             remind_verification = False
 
@@ -79,10 +79,10 @@ class WebVerificationCog(commands.Cog):
 
     async def verify_member(self, member_uuid):
         self.logger.info(f"UUID {member_uuid} passed the verification test.")
-        member_record = await self.db_client.gchqbot.members.find_one({"uuid": str(member_uuid)})
+        member_record = await self.db_client.gchqbot.members.find_one({"_id": str(member_uuid)})
         guild_obj, member_obj = await self.__member_verification_flow(member_record)
         await self.db_client.gchqbot.members.update_one(
-            {"uuid": str(member_uuid)},
+            {"_id": str(member_uuid)},
             {"$set": {"verified": True}}
         )
         await member_obj.send(f"You have now been verified on {guild_obj}.")
@@ -186,7 +186,7 @@ class WebVerificationCog(commands.Cog):
             if db_client is None:
                 return Response("Error occurred while fetching results, try again.", 503)
             members_collection = db_client.gchqbot.members
-            member_record = await members_collection.find_one({"uuid": str(verif_id)})
+            member_record = await members_collection.find_one({"_id": str(verif_id)})
             if member_record is None or member_record["verified"] is True:
                 abort(404)
 
