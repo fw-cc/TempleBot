@@ -8,6 +8,8 @@ from pymongo import errors as pymongoerrors
 from logging import handlers
 
 from discord.ext import commands
+from shutil import copy
+from configobj import ConfigObj
 import discord
 
 
@@ -24,6 +26,26 @@ class GCHQBot(commands.Bot):
         self.db_client = None
         for extension in base_config_options["extensions"]:
             self.load_extension(extension)
+
+    def get_cog_config(self, config_name):
+        cog_config_loc = f"./extensions/extensions_configs/{config_name}"
+        example_cog_config_loc = cog_config_loc + "_example.cfg"
+        backup_cog_config_loc = cog_config_loc + "_backup.cfg"
+        cog_config_loc += ".cfg"
+        example_exists = os.path.exists(example_cog_config_loc)
+        main_config_exists = os.path.exists(cog_config_loc)
+        if not example_exists and not main_config_exists:
+            self.logger.exception(f"{cog_config_loc} does not have a valid example config or in use config.")
+            return
+        elif example_exists and not main_config_exists:
+            self.logger.warning(f"No usable config exists, duplicating example config {cog_config_loc}.")
+            copy(example_cog_config_loc, cog_config_loc)
+            return
+        elif not example_exists and main_config_exists:
+            self.logger.warning(f"In use config exists {cog_config_loc} but no example was found, if "
+                                f"issues are encountered download an updated example config.")
+            copy(cog_config_loc, backup_cog_config_loc)
+        return ConfigObj(cog_config_loc)
 
     @staticmethod
     def __config_logging(logging_level=logging.INFO, outdir="./logs"):
