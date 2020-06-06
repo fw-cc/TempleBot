@@ -15,7 +15,7 @@ verification_role_ids:
 # Used in verification URL generation (users will see this)
 verification_domain: "ask the bot owner to change the 'verification_domain' setting"
 extensions:
-  - "extensions.verification"
   - "extensions.db_setup"
+  - "extensions.verification"
   - "extensions.admin_utils"
   - "extensions.chan_manager"
