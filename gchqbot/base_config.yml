@@ -2,7 +2,7 @@
 # after restarts.
 admin_ids: []
 logging_level: "DEBUG"
-owner_id: 0
+owner_id: 103595773379223552
 command_prefix: "gchq."
 # Used ONLY for SSL challenge static routing.
 # Ensure it ends with "/"
@@ -19,4 +19,3 @@ extensions:
   - "extensions.db_setup"
   - "extensions.admin_utils"
   - "extensions.chan_manager"
-  - "extensions.admin_utils"
