@@ -19,7 +19,9 @@ class ChannelManagerCog(commands.Cog):
         if len(self.cog_config["initial-managed-channels"].keys()) == 0:
             self.logger.info("No initial managed channel defined, channel management disabled")
             self.bot.remove_cog("ChannelManagerCog")
-        self.managed_channels_dict = self.cog_config["initial-managed-channels"]
+        self.managed_channels_dict = {
+            guild_id_str: int(init_chan_id_str)
+            for guild_id_str, init_chan_id_str in self.cog_config["initial-managed-channels"].items()}
         self.managed_category = None
         self.logger.info("Loaded ChannelManagerCog")
 
@@ -50,6 +52,7 @@ class ChannelManagerCog(commands.Cog):
             if before.channel.id == after.channel.id:
                 return
             # Filter out cases where channels of reference are both not under bot management:
+            self.logger.debug(f"{self.managed_channels_dict}")
             if before.channel.id not in self.managed_channels_dict[str(member.guild.id)] and \
                     after.channel.id not in self.managed_channels_dict[str(member.guild.id)]:
                 return
@@ -61,17 +64,18 @@ class ChannelManagerCog(commands.Cog):
             work_depth = await self.check_managed_channels(target_guild=member.guild)
             self.logger.debug(f"Completed channel rearrangement for guild: {member.guild} depth: {work_depth}")
 
-    async def check_managed_channels(self, target_guild=None, depth=0):
+    async def check_managed_channels(self, target_guild=None, depth=0, channel_obj_list=None):
         if target_guild is None:
             for guild_id in self.managed_channels_dict.keys():
                 await self.check_managed_channels(target_guild=self.bot.get_guild(int(guild_id)),
                                                   depth=(depth + 1))
             return
 
-        # Iterate through all managed channels except the persistent base channel,
-        # generating a list of up to date voice channel objects under management.
-        channel_obj_list = [self.bot.get_channel(channel_id)
-                            for channel_id in self.managed_channels_dict[str(target_guild.id)]]
+        # Iterate through all managed channels generating a list of up to date
+        # voice channel objects under management.
+        if channel_obj_list is None:
+            channel_obj_list = [self.bot.get_channel(channel_id)
+                                for channel_id in self.managed_channels_dict[str(target_guild.id)]]
         await channel_obj_list[0].edit(position=0)
         # for channel_id in self.managed_channels_dict[str(target_guild.id)][1:]:
         #     channel_obj = self.bot.get_channel(channel_id)
@@ -86,21 +90,6 @@ class ChannelManagerCog(commands.Cog):
                 self.logger.debug("Deleted channel")
                 # Run this method again to shuffle channels to correct their names
                 return await self.check_managed_channels(target_guild=target_guild, depth=(depth + 1))
-
-        # Check if the last channel has users in it
-        if channel_obj_list[-1].members:
-            # Make sure we aren't about to exceed the maximum number of voice channels
-            if len(self.managed_channels_dict[str(target_guild.id)]) > int(self.cog_config["max_managed_channels"]):
-                return
-            new_channel_position = channel_obj_list[-1].position + 1
-            new_channel_obj = await channel_obj_list[-1].clone(
-                name="The {} Call".format(
-                    num2words(len(self.managed_channels_dict[str(target_guild.id)]) + 1,
-                              to='ordinal', lang='en').capitalize()))
-            self.managed_channels_dict[str(target_guild.id)].append(new_channel_obj.id)
-            await new_channel_obj.edit(position=new_channel_position)
-            self.logger.debug("Created channel")
-            return await self.check_managed_channels(target_guild=target_guild, depth=(depth + 1))
 
         # Check to see if each channel's name matches with the pattern, rename if needed
         # also does channel reordering in the same loop, because efficiency.
@@ -118,8 +107,27 @@ class ChannelManagerCog(commands.Cog):
                 await current_channel.edit(position=(index + channel_obj_list[0].position))
                 self.logger.debug("Changed channel position")
                 channels_reordered = True
+
+        # Check if the last channel has users in it
+        if channel_obj_list[-1].members:
+            # Make sure we aren't about to exceed the maximum number of voice channels
+            if len(self.managed_channels_dict[str(target_guild.id)]) > int(self.cog_config["max_managed_channels"]):
+                return
+            new_channel_position = channel_obj_list[-1].position + 1
+            new_channel_obj = await channel_obj_list[-1].clone(
+                name="The {} Call".format(
+                    num2words(len(self.managed_channels_dict[str(target_guild.id)]) + 1,
+                              to='ordinal', lang='en').capitalize()))
+            self.managed_channels_dict[str(target_guild.id)].append(new_channel_obj.id)
+            await new_channel_obj.edit(position=new_channel_position)
+            channel_obj_list.append(new_channel_obj)
+            self.logger.debug("Created channel")
+            return await self.check_managed_channels(target_guild=target_guild, depth=(depth + 1),
+                                                     channel_obj_list=channel_obj_list)
+
         if channels_reordered:
-            return await self.check_managed_channels(target_guild=target_guild, depth=(depth + 1))
+            return await self.check_managed_channels(target_guild=target_guild, depth=(depth + 1),
+                                                     channel_obj_list=channel_obj_list)
 
         return depth
 
