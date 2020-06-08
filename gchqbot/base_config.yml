@@ -19,3 +19,5 @@ extensions:
   - "extensions.verification"
   - "extensions.admin_utils"
   - "extensions.chan_manager"
+  - "extensions.upvote_downvote_cog"
+  - "extensions.weeb_cog"
