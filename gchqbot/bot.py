@@ -29,9 +29,9 @@ class GCHQBot(commands.Bot):
 
     def get_cog_config(self, config_name):
         cog_config_loc = f"./extensions/extensions_configs/{config_name}"
-        example_cog_config_loc = cog_config_loc + "_example.cfg"
-        backup_cog_config_loc = cog_config_loc + "_backup.cfg"
-        cog_config_loc += ".cfg"
+        example_cog_config_loc = cog_config_loc + "_example.config"
+        backup_cog_config_loc = cog_config_loc + "_backup.config"
+        cog_config_loc += ".config"
         example_exists = os.path.exists(example_cog_config_loc)
         main_config_exists = os.path.exists(cog_config_loc)
         if not example_exists and not main_config_exists:
