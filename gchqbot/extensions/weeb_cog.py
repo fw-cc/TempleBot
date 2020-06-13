@@ -142,10 +142,15 @@ class WeebCog(commands.Cog):
         item_selection_embed = discord.Embed(title=f"GCHQBot {m_a_type(message_class).capitalize()} Selection.")
         options_list_string = ""
         number_to_title = {}
+
+        if len(r_obj_raw["results"]) == 0:
+            await weeb_shit_channel.send("No results found")
+            self.logger.debug(f"{r_obj_raw}")
+            return
+
         try:
             for i in range(5):
                 options_list_string += f":{w_to_n_h_tab[i]}: - {r_obj_raw['results'][i]['title']}\n"
-                number_to_title[f":{w_to_n_h_tab[i]}:"] = r_obj_raw['results'][i]
         except Exception:
             pass
 
@@ -153,29 +158,35 @@ class WeebCog(commands.Cog):
         item_selection_embed.add_field(name="Are any of these correct?",
                                        value=options_list_string)
 
+        initial_option_message = await weeb_shit_channel.send(embed=item_selection_embed)
+
         msg_rand_id = random.randint(0, 100000)
         while msg_rand_id in self.message_reaction_waiting_h_table.keys():
             msg_rand_id = random.randint(0, 100000)
-
-        initial_option_message = await weeb_shit_channel.send(embed=item_selection_embed)
-
-        unicode_emote_hash_table = {":zero:": "0⃣", ":one:": "1⃣", ":two:": "2⃣",
-                                    ":three:": "3⃣", ":four:": "4⃣", "five": "5⃣"}
-
         self.message_reaction_waiting_h_table[msg_rand_id] = {"number_to_title": number_to_title,
                                                               "msg_id": initial_option_message.id,
                                                               "msg_rand_id": msg_rand_id,
                                                               "user_reacted": False,
                                                               "user_reaction": 0,
                                                               "user_id": message_class.author.id}
+        unicode_emote_hash_table = {":zero:": "0⃣", ":one:": "1⃣", ":two:": "2⃣",
+                                    ":three:": "3⃣", ":four:": "4⃣", "five": "5⃣"}
+        try:
+            for i in range(5):
+                emoji_name = f":{w_to_n_h_tab[i]}:"
+                number_to_title[f"{emoji_name}"] = r_obj_raw['results'][i]
+        except Exception:
+            pass
 
+        self.logger.debug(f"{number_to_title}")
+        early_reacted = False
         for emote in number_to_title.keys():
+            if self.message_reaction_waiting_h_table[msg_rand_id]["user_reacted"]:
+                early_reacted = True
+                break
             await initial_option_message.add_reaction(unicode_emote_hash_table[emote])
-        await initial_option_message.add_reaction("\N{Regional Indicator Symbol Letter X}")
-
-        for reaction in initial_option_message.reactions:
-            if reaction.count > 1:
-                await self.on_reaction_add(reaction)
+        if not early_reacted:
+            await initial_option_message.add_reaction("\N{Regional Indicator Symbol Letter X}")
 
         loop_sleep_time_s = 0.05
         max_loop_runtime_s = 30
@@ -220,6 +231,7 @@ class WeebCog(commands.Cog):
         else:
             new_media_obj = await self.jikan_aio.manga(r_obj["mal_id"])
 
+        self.british_timezone = pytz.timezone('Europe/London')
         now = datetime.now(self.british_timezone)
 
         def date_ordinal_letter(day_num: int) -> str:
