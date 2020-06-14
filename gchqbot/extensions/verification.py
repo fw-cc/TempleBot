@@ -11,8 +11,11 @@ import logging
 import asyncio
 import uuid
 from datetime import datetime, timedelta
+from pymongo import errors as mongoerrs
 
 from typing import Tuple
+
+from timeit import default_timer as timer
 
 from quart import Quart, Response, abort
 from hypercorn import asyncio as asyncio_hypercorn
@@ -36,8 +39,9 @@ class WebVerificationCog(commands.Cog):
 
     async def __on_member_join_internal(self, member, force_remind=False, force_reverif=False):
         db = self.db_client.gchqbot
-        collection = db.members
-        member_record = await collection.find_one(
+        member_collection = db.members
+        ppmp_notice_collection = db.ppmp_notice
+        member_record = await member_collection.find_one(
             {"user_id": member.id, "guild_id": member.guild.id})
         self.logger.debug(f"Member record found: {member_record}")
         remind_verification = True
@@ -49,19 +53,29 @@ class WebVerificationCog(commands.Cog):
                 "user_id": member.id,
                 "guild_id": member.guild.id,
                 "roles": [],
-                "modifiers": [],
+                "modifiers": {},
+                "penal_record": [],
                 "verified": False
             }
-            await collection.insert_one(member_record)
+            await member_collection.insert_one(member_record)
         elif member_record["verified"] is False:
             member_uuid = member_record["_id"]
         elif force_reverif:
             member_uuid = member_record["_id"]
-            await collection.update_one({"user_id": member.id, "guild_id": member.guild.id},
-                                        {"$set": {"verified": False}})
+            await member_collection.update_one({"user_id": member.id, "guild_id": member.guild.id},
+                                               {"$set": {"verified": False}})
             # member_uuid = new_member_uuid
         else:
             remind_verification = False
+
+        # Attempt to add the new member to the list of users accepting ppmp notices
+        try:
+            await ppmp_notice_collection.insert_one({
+                "_id": member.id,
+                "send_notice": True
+            })
+        except mongoerrs.DuplicateKeyError:
+            pass
 
         if remind_verification or force_remind:
             await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
@@ -86,6 +100,7 @@ class WebVerificationCog(commands.Cog):
             {"$set": {"verified": True}}
         )
         await member_obj.send(f"You have now been verified on {guild_obj}.")
+        return member_record
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -96,7 +111,7 @@ class WebVerificationCog(commands.Cog):
         """Internal function used to return roles owned by a member before they left the server back to them
         after they rejoin, based on the most recent backup in the Database."""
         self.logger.info(f"Repatriating member {member} on {member.guild}")
-        if record["verified"]:
+        if record["verified"] and "temp_unverif_mute" not in record["modifiers"].keys():
             await self.__member_verification_flow(record)
 
     @commands.Cog.listener()
@@ -120,6 +135,52 @@ class WebVerificationCog(commands.Cog):
             if role_obj is None:
                 self.logger.warning(f"Role id: {role_id} defined in config not found")
             self.verification_role_hash_table[guild_id] = int(role_id)
+
+    @commands.group(name="ppmp")
+    @commands.cooldown(1, 30, type=commands.BucketType.user)
+    async def ppmp_group(self, ctx):
+        if ctx.invoked_subcommand is None:
+            await ctx.send(f"You need to use a subcommand with this command group.\n\n"
+                           f"Use `{self.bot.command_prefix}help ppmp` to see child commands.")
+
+    @ppmp_group.command(name="enable")
+    async def ppmp_enable(self, ctx):
+        await self.db_client.gchqbot.ppmp_notice.update_one({"_id": ctx.author.id}, {"$set": {"send_notice": True}})
+        await ctx.author.send("You will now receive PPMP notices.")
+
+    @ppmp_group.command(name="disable")
+    async def ppmp_disable(self, ctx):
+        await self.db_client.gchqbot.ppmp_notice.update_one({"_id": ctx.author.id}, {"$set": {"send_notice": False}})
+        await ctx.author.send("You will not receive PPMP notices.")
+
+    @commands.is_owner()
+    @ppmp_group.command(name="send_notice", hidden=True)
+    async def send_ppmp_notice(self, ctx, new_policy_url, *, changes=""):
+        ppmp_start = timer()
+        ppmp_message_string = f"__**PPMP Notice Service Message:**__\n\nTo disable these notices, send " \
+                              f"`{self.bot.command_prefix}ppmp disable` in this Direct Message channel.\n\n" \
+                              f"The Operator of this Software has made modifications to the Privacy Policy that " \
+                              f"require prior notice to be given to Users of the PPMP Notice Service. " \
+                              f"A copy of the new Privacy Policy may be found at {new_policy_url}.\n\n"
+        if changes != "":
+            ppmp_message_string += f"The Operator of this Software has given a list of changes made, please see " \
+                                   f"below:\n" \
+                                   f"```{changes}```\n\n"
+
+        ppmp_message_string += "In the case these changes are not within the bounds you deem acceptable, please " \
+                               "contact the Operator of this Software or revoke consent under Section 2 of the " \
+                               "Privacy Policy."
+
+        ppmp_send_to_list = await self.db_client.gchqbot.ppmp_notice.find({"send_notice": True}).to_list(None)
+        for user_db_object in ppmp_send_to_list:
+            user_obj = self.bot.get_user(user_db_object["_id"])
+            if user_obj is not None:
+                try:
+                    await user_obj.send(ppmp_message_string)
+                except discord.HTTPException:
+                    pass
+
+        self.logger.info(f"Sent {len(ppmp_send_to_list)} PPMP notice messages in {(timer() - ppmp_start):.2f}s")
 
     def __cache_owner_object(self, owner_id):
         cache_datetime, owner_obj = self.cached_owner_obj
@@ -180,8 +241,14 @@ class WebVerificationCog(commands.Cog):
             verif_form = VerifyForm()
 
             if verif_form.validate_on_submit():
-                await self.verify_member(str(verif_id))
-                return await render_template("verification_success.html")
+                member_rec_obj = await self.verify_member(str(verif_id))
+                ppmp_bool = await db_client.gchqbot.ppmp_notice.find_one({"_id": member_rec_obj["user_id"]})
+                ppmp_str = "<ppmp_status>"
+                if ppmp_bool:
+                    ppmp_str = "Enabled"
+                else:
+                    ppmp_str = "Disabled"
+                return await render_template("verification_success.html", ppmp_status=ppmp_str)
 
             if db_client is None:
                 return Response("Error occurred while fetching results, try again.", 503)
