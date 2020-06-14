@@ -7,6 +7,9 @@ from discord.ext import commands
 import os
 from configparser import ConfigParser
 
+# todo:
+#   - optimise channel reshuffling process to make it less awful to look at
+
 
 class ChannelManagerCog(commands.Cog):
 
@@ -23,7 +26,7 @@ class ChannelManagerCog(commands.Cog):
             guild_id_str: int(init_chan_id_str)
             for guild_id_str, init_chan_id_str in self.cog_config["initial-managed-channels"].items()}
         self.managed_category = None
-        self.logger.info("Loaded ChannelManagerCog")
+        # self.logger.info("Loaded ChannelManagerCog")
 
     @commands.Cog.listener()
     async def on_ready(self):
