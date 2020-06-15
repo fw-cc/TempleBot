@@ -15,7 +15,7 @@ from datetime import timedelta
 import discord
 
 
-class GCHQBot(commands.Bot):
+class TempleBot(commands.Bot):
     def __init__(self, command_prefix, base_config_options, captcha_keypair, **options):
         super().__init__(command_prefix, **options)
         self.start_datetime = datetime.datetime.now()
@@ -80,7 +80,7 @@ class GCHQBot(commands.Bot):
 
     @staticmethod
     def __config_logging(logging_level=logging.INFO, outdir="./logs"):
-        logger = logging.getLogger("GCHQBot")
+        logger = logging.getLogger("TempleBot")
         logger.setLevel(logging_level)
         formatter = logging.Formatter('[{asctime}] [{levelname:}] {name}: {message}',
                                       '%Y-%m-%d %H:%M:%S', style='{')

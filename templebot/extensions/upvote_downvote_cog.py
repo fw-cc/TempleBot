@@ -9,7 +9,7 @@ class UpvoteDownvoteCog(commands.Cog):
         self.bot = bot
         self.config = self.bot.get_cog_config("upvote_downvote_cog_config")
         self.vote_prepped_data = None
-        self.logger = logging.getLogger("GCHQBot.UpvoteDownvoteCog")
+        self.logger = logging.getLogger("TempleBot.UpvoteDownvoteCog")
 
     @commands.Cog.listener()
     async def on_ready(self):

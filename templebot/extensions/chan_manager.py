@@ -15,7 +15,7 @@ class ChannelManagerCog(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.logger = logging.getLogger("GCHQBot.ChannelManager")
+        self.logger = logging.getLogger("TempleBot.ChannelManager")
         # super().__init__("./extensions/extensions_configs/chan_manager_config.ini", self.config_schema)
         self.cog_config = self.bot.get_cog_config("chan_manager_config")
         self.main_guild_id = self.bot.config_data

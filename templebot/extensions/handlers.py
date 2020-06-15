@@ -9,7 +9,7 @@ class HandlersCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # self.config = self.bot.get_cog_config("handlers_cog_config")
-        self.logger = logging.getLogger("GCHQBot.HandlersCog")
+        self.logger = logging.getLogger("TempleBot.HandlersCog")
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):

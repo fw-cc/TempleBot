@@ -24,7 +24,7 @@ async def _clean_temp_files():
 class WeebCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.logger = logging.getLogger("GCHQBot.weeb")
+        self.logger = logging.getLogger("TempleBot.weeb")
         self.british_timezone = pytz.timezone('Europe/London')
         self.logger.info("Opening MAL API event loop.")
         self.jikan_aio = AioJikan()

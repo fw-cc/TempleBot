@@ -1,4 +1,4 @@
-from gchqbot import GCHQBot
+from templebot import TempleBot
 
 import yaml
 import os
@@ -23,7 +23,7 @@ if __name__ == "__main__":
                 captcha_pair["privatekey"] == "":
             print("Define captcha keypair before running")
             exit(-1)
-    bot = GCHQBot(config_values["command_prefix"],
-                  base_config_options=config_values,
-                  captcha_keypair=captcha_pair)
+    bot = TempleBot(config_values["command_prefix"],
+                    base_config_options=config_values,
+                    captcha_keypair=captcha_pair)
     bot.run(token)

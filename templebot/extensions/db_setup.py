@@ -12,7 +12,7 @@ import logging
 class DBSetup(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.logger = logging.getLogger("GCHQBot.DBSetup")
+        self.logger = logging.getLogger("TempleBot.DBSetup")
         self.db_client = None
 
     @commands.Cog.listener()
@@ -25,11 +25,11 @@ class DBSetup(commands.Cog):
         try:
             if uname is not None and upass is not None:
                 client_inst = motor_asyncio.AsyncIOMotorClient(
-                    ("mongodb://%s:%s@%s:27017/gchqbot" % (uname, upass, mongo_address)),
+                    ("mongodb://%s:%s@%s:27017/templebot" % (uname, upass, mongo_address)),
                     io_loop=asyncio.get_event_loop())
             else:
                 client_inst = motor_asyncio.AsyncIOMotorClient(
-                    ("mongodb://%s:27017/gchqbot" % mongo_address),
+                    ("mongodb://%s:27017/templebot" % mongo_address),
                     io_loop=asyncio.get_event_loop())
             self.logger.debug(str(client_inst))
             self.db_client = client_inst

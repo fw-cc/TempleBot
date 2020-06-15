@@ -24,7 +24,7 @@ from hypercorn import asyncio as asyncio_hypercorn
 class WebVerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.logger = logging.getLogger("GCHQBot.Verification")
+        self.logger = logging.getLogger("TempleBot.Verification")
         self.verification_role_hash_table = {}
         self.cached_owner_obj = (None, None)
         self.db_client = None
