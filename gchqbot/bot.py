@@ -6,10 +6,12 @@ from motor import motor_asyncio
 from pymongo import errors as pymongoerrors
 
 from logging import handlers
+from collections import OrderedDict
 
 from discord.ext import commands
 from shutil import copy
 from configobj import ConfigObj
+from datetime import timedelta
 import discord
 
 
@@ -26,6 +28,33 @@ class GCHQBot(commands.Bot):
         self.db_client = None
         for extension in base_config_options["extensions"]:
             self.load_extension(extension)
+
+    @staticmethod
+    def parse_hms_str_to_timedelta(hms_str: str) -> timedelta:
+        # Uses ordereddict to make sure we go in the correct order, divinely inspired
+        if hms_str == "-1":
+            return timedelta(weeks=10000)
+        hms_letter_kwarg_table = OrderedDict([
+            ("w", "weeks"),
+            ("d", "days"),
+            ("h", "hours"),
+            ("m", "minutes"),
+            ("s", "seconds")
+        ])
+        dt_kwarg_dict = {}
+        for delim, kwarg in hms_letter_kwarg_table.items():
+            split_str = hms_str.split(delim)
+            if len(split_str) > 2:
+                raise commands.BadArgument(f"Improper duration string given, supports up to w (weeks), passed: "
+                                           f"{hms_str}")
+            hms_str = split_str[-1]
+            if len(split_str) != 1:
+                # in this case we have a datetime delimiter to worry about
+                dt_kwarg_dict[kwarg] = int(split_str[0])
+        if dt_kwarg_dict == {}:
+            raise commands.BadArgument(f"Improper duration string given, supports up to w (weeks), passed: "
+                                       f"{hms_str}")
+        return timedelta(**dt_kwarg_dict)
 
     def get_cog_config(self, config_name):
         cog_config_loc = f"./extensions/extensions_configs/{config_name}"
