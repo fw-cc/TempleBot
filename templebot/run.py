@@ -6,13 +6,13 @@ import shutil
 
 
 if __name__ == "__main__":
-    with open("./base_config.yml", "r") as base_config:
+    with open("base_config.yml", "r") as base_config:
         config_values = yaml.safe_load(base_config)
-    if not os.path.exists("./token.yml"):
-        shutil.copyfile("./token.example.yml", "./token.yml")
+    if not os.path.exists("token.yml"):
+        shutil.copyfile("./token.example.yml", "token.yml")
         print("Define token before running")
         exit(-1)
-    with open("./token.yml", "r") as token_file:
+    with open("token.yml", "r") as token_file:
         loaded_tokenfile = yaml.safe_load(token_file)
         token = loaded_tokenfile["token"]
         if token == "":
