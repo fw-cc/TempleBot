@@ -1,4 +1,4 @@
-# TempleBot `2.0.0a`
+# TempleBot `2.0.0b`
 
 Private bot for a private server, spying and protecting since 1919.
 
