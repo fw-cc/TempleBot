@@ -34,7 +34,7 @@ class WeebCog(commands.Cog):
         self.current_mal_req_count_pm = 0
         # self.logger.info("Loaded WeebCog")
 
-    @commands.command(name="weeb_search")
+    @commands.command(name="weeb_search", hidden=True)
     async def weeb_search_command(self, ctx):
         ctx.message.content = ctx.message.content.strip(self.bot.command_prefix).strip("weeb_search ")
         try:
