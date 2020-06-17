@@ -1,0 +1,23 @@
+# This config is loaded into the mongodb database for persistence, changes here will propagate to the database
+# after restarts.
+admin_ids: []
+logging_level: "INFO"
+owner_id: REEEEEEEEEEE
+command_prefix: "gchq."
+# Used ONLY for SSL challenge static routing.
+# Ensure it ends with "/"
+webroot_path: "./extensions/"
+webserver_secret_session_key: "secret key goes here :)"
+verification_role_ids:
+  # - guild_id:role_id
+
+# Used in verification URL generation (users will see this)
+verification_domain: "  `ask the bot owner to change the 'verification_domain' setting`  "
+extensions:
+  - "templebot.extensions.db_setup"
+  - "templebot.extensions.verification"
+  - "templebot.extensions.admin_utils"
+  - "templebot.extensions.chan_manager"
+  - "templebot.extensions.upvote_downvote_cog"
+  - "templebot.extensions.weeb_cog"
+  - "templebot.extensions.handlers"
