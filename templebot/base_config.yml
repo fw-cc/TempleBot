@@ -1,0 +1,24 @@
+# This config is loaded into the mongodb database for persistence, changes here will propagate to the database
+# after restarts.
+admin_ids: []
+logging_level: "DEBUG"
+owner_id: 103595773379223552
+command_prefix: "gchq."
+# Used ONLY for SSL challenge static routing.
+# Ensure it ends with "/"
+webroot_path: "./extensions/"
+webserver_secret_session_key: "secret key goes here :)"
+verification_role_ids:
+  # - guild_id:role_id
+  - "192291925326299137:602532197882265621"
+  - "526781326213382154:704336345899728991"
+# Used in verification URL generation (users will see this)
+verification_domain: "ask the bot owner to change the 'verification_domain' setting"
+extensions:
+  - "extensions.db_setup"
+  - "extensions.verification"
+  - "extensions.admin_utils"
+  - "extensions.chan_manager"
+  - "extensions.upvote_downvote_cog"
+  - "extensions.weeb_cog"
+  - "extensions.handlers"

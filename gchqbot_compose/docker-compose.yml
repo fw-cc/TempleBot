@@ -1,0 +1,25 @@
+version: "3"
+
+services:
+  bot:
+    image: "pytato/gchqbot:dev"
+    restart: always
+    environment:
+      - "MONGOD_UNAME="
+      - "MONGOD_UPASS="
+    ports:
+      - "27017"
+      - "80"
+      - "5000:5000"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    volumes:
+      - ./base_config.yml:/templebot/base_config.yml
+      - ./token.example.yml:/templebot/token.example.yml
+      - ./token.yml:/templebot/token.yml
+
+  watchtower:
+      image: "containrrr/watchtower"
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      command: --interval 30 --label-enable --cleanup

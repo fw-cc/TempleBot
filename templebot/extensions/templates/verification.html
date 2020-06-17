@@ -1,0 +1,31 @@
+<html lang="html5">
+<head>
+    <title>TempleBot Verification</title>
+</head>
+<body style="background-color:black; color:#758cbb">
+    <h2>GCHQBot Account Verification:</h2>
+    <form method="POST" action="{{ url_for('handle_verification', verif_id=verif_uuid) }}">
+        <div>
+            {{ form.csrf_token }}
+            {{ form.recaptcha }}
+        </div>
+            <label for="privacy_check">I have both read to completeness and understand the
+                <a href="{{ url_for('return_privacy_statement') }}" target="_blank">Service Privacy Policy</a>:
+            </label>
+            <input type="checkbox" name="privacy_check" id="privacy_check" required>
+        </div>
+        <div>
+            <label>You will be automatically notified of upcoming Privacy Policy modifications as outlined in
+            Section 5 of the Privacy Policy.</label>
+        </div>
+        <div>
+            <input type="submit" value="Verify Humanity">
+        </div>
+    </form>
+<!--    <footer>-->
+<!--        <p>-->
+<!--            <a href="{{ url_for('return_privacy_statement') }}">Privacy Policy</a>-->
+<!--        </p>-->
+<!--    </footer>-->
+</body>
+</html>
