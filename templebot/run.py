@@ -1,4 +1,4 @@
-from templebot import TempleBot
+from templebot.bot import TempleBot
 
 import yaml
 import os
