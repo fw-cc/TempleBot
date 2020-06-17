@@ -57,7 +57,7 @@ class TempleBot(commands.Bot):
         return timedelta(**dt_kwarg_dict)
 
     def get_cog_config(self, config_name):
-        cog_config_loc = f"./extensions/extensions_configs/{config_name}"
+        cog_config_loc = f"./templebot/extensions/extensions_configs/{config_name}"
         config_extension = ".config"
         example_cog_config_loc = cog_config_loc + "_example" + config_extension
         cog_config_loc += config_extension

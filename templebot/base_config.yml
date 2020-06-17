@@ -15,10 +15,10 @@ verification_role_ids:
 # Used in verification URL generation (users will see this)
 verification_domain: "ask the bot owner to change the 'verification_domain' setting"
 extensions:
-  - "extensions.db_setup"
-  - "extensions.verification"
-  - "extensions.admin_utils"
-  - "extensions.chan_manager"
-  - "extensions.upvote_downvote_cog"
-  - "extensions.weeb_cog"
-  - "extensions.handlers"
+  - "templebot.extensions.db_setup"
+  - "templebot.extensions.verification"
+  - "templebot.extensions.admin_utils"
+  - "templebot.extensions.chan_manager"
+  - "templebot.extensions.upvote_downvote_cog"
+  - "templebot.extensions.weeb_cog"
+  - "templebot.extensions.handlers"
