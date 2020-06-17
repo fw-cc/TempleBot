@@ -3,7 +3,7 @@
 admin_ids: []
 logging_level: "INFO"
 owner_id: REEEEEEEEEEE
-command_prefix: "gchq."
+command_prefix: "temple."
 # Used ONLY for SSL challenge static routing.
 # Ensure it ends with "/"
 webroot_path: "./extensions/"
