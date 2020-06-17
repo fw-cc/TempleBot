@@ -1,4 +1,5 @@
 # TempleBot `2.0.0a`
+
 Private bot for a private server, spying and protecting since 1919.
 
 `2.0.0a` is a rewrite of the old bot to make it docker compatible, more modular
