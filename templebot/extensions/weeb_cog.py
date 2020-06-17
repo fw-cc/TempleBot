@@ -139,7 +139,7 @@ class WeebCog(commands.Cog):
 
         # PLACEHOLDER FOR BETTER RESULT OPTIONS
         w_to_n_h_tab = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
-        item_selection_embed = discord.Embed(title=f"GCHQBot {m_a_type(message_class).capitalize()} Selection.")
+        item_selection_embed = discord.Embed(title=f"TempleBot {m_a_type(message_class).capitalize()} Selection.")
         options_list_string = ""
         number_to_title = {}
 
@@ -282,8 +282,8 @@ class WeebCog(commands.Cog):
 
         item_embed.set_footer(text=f"Data scraped with JikanPy | {now_brit} {now.tzname()}",
                               icon_url="https://i.imgur.com/fSPtnoP.png")
-        item_embed.set_author(name="Pytato/GCHQBot", icon_url="https://lithi.io/file/XVKH.png",
-                              url="https://github.com/Pytato/GCHQBot")
+        item_embed.set_author(name="Pytato/TempleBot", icon_url="https://lithi.io/file/XVKH.png",
+                              url="https://github.com/Pytato/TempleBot")
         if found_image:
             item_embed.set_thumbnail(url=new_img_url)
 
