@@ -31,7 +31,7 @@ class WebVerificationCog(commands.Cog):
         self.has_called_webserver = False
         self.captcha_keys = self.bot.recaptcha_keypair
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.is_owner()
     async def test_add_member(self, ctx):
         self.logger.debug("Test member command called")
