@@ -53,7 +53,7 @@ class WebVerificationCog(commands.Cog):
     async def bulk_clean_verification_role(self, ctx):
         verification_role_id = self.verification_role_hash_table[str(ctx.guild.id)]
         verification_role_obj = ctx.guild.get_role(int(verification_role_id))
-        db = self.db_client.gchqbot
+        db = self.db_client.templebot
         member_collection = db.members
         for member in verification_role_obj.members:
             member_record = await member_collection.find_one(
@@ -86,7 +86,7 @@ class WebVerificationCog(commands.Cog):
     async def __on_member_join_internal(self, member, force_remind=False, force_reverif=False, dont_repat=False):
         if member.bot:
             return
-        db = self.db_client.gchqbot
+        db = self.db_client.templebot
         member_collection = db.members
         ppmp_notice_collection = db.ppmp_notice
         member_record = await member_collection.find_one(
@@ -152,9 +152,9 @@ class WebVerificationCog(commands.Cog):
 
     async def verify_member(self, member_uuid):
         self.logger.info(f"UUID {member_uuid} passed the verification test.")
-        member_record = await self.db_client.gchqbot.members.find_one({"_id": str(member_uuid)})
+        member_record = await self.db_client.templebot.members.find_one({"_id": str(member_uuid)})
         guild_obj, member_obj = await self.__member_verification_flow(member_record)
-        await self.db_client.gchqbot.members.update_one(
+        await self.db_client.templebot.members.update_one(
             {"_id": str(member_uuid)},
             {"$set": {"verified": True}}
         )
@@ -204,12 +204,12 @@ class WebVerificationCog(commands.Cog):
 
     @ppmp_group.command(name="enable")
     async def ppmp_enable(self, ctx):
-        await self.db_client.gchqbot.ppmp_notice.update_one({"_id": ctx.author.id}, {"$set": {"send_notice": True}})
+        await self.db_client.templebot.ppmp_notice.update_one({"_id": ctx.author.id}, {"$set": {"send_notice": True}})
         await ctx.author.send("You will now receive PPMP notices.")
 
     @ppmp_group.command(name="disable")
     async def ppmp_disable(self, ctx):
-        await self.db_client.gchqbot.ppmp_notice.update_one({"_id": ctx.author.id}, {"$set": {"send_notice": False}})
+        await self.db_client.templebot.ppmp_notice.update_one({"_id": ctx.author.id}, {"$set": {"send_notice": False}})
         await ctx.author.send("You will not receive PPMP notices.")
 
     @commands.is_owner()
@@ -230,7 +230,7 @@ class WebVerificationCog(commands.Cog):
                                "contact the Operator of this Software or revoke consent under Section 2 of the " \
                                "Privacy Policy."
 
-        ppmp_send_to_list = await self.db_client.gchqbot.ppmp_notice.find({"send_notice": True}).to_list(None)
+        ppmp_send_to_list = await self.db_client.templebot.ppmp_notice.find({"send_notice": True}).to_list(None)
         for user_db_object in ppmp_send_to_list:
             user_obj = self.bot.get_user(user_db_object["_id"])
             if user_obj is not None:
@@ -301,7 +301,7 @@ class WebVerificationCog(commands.Cog):
 
             if verif_form.validate_on_submit():
                 member_rec_obj = await self.verify_member(str(verif_id))
-                ppmp_bool = await db_client.gchqbot.ppmp_notice.find_one({"_id": member_rec_obj["user_id"]})
+                ppmp_bool = await db_client.templebot.ppmp_notice.find_one({"_id": member_rec_obj["user_id"]})
                 ppmp_str = "<ppmp_status>"
                 if ppmp_bool:
                     ppmp_str = "Enabled"
@@ -311,7 +311,7 @@ class WebVerificationCog(commands.Cog):
 
             if db_client is None:
                 return Response("Error occurred while fetching results, try again.", 503)
-            members_collection = db_client.gchqbot.members
+            members_collection = db_client.templebot.members
             member_record = await members_collection.find_one({"_id": str(verif_id)})
             if member_record is None or member_record["verified"] is True:
                 abort(404)
