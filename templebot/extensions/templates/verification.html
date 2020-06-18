@@ -9,7 +9,7 @@
             {{ form.csrf_token }}
             {{ form.recaptcha }}
         </div>
-            <label for="privacy_check">I have both read to completeness and understand the
+            <label for="privacy_check">I agree with and have read to completeness, the
                 <a href="{{ url_for('return_privacy_statement') }}" target="_blank">Service Privacy Policy</a>:
             </label>
             <input type="checkbox" name="privacy_check" id="privacy_check" required>
