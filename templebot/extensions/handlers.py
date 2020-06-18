@@ -14,12 +14,17 @@ class HandlersCog(commands.Cog):
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
         silent_exceptions = [
-            commands.CommandOnCooldown
+            commands.CommandOnCooldown,
+            commands.PrivateMessageOnly
         ]
         if type(error) not in silent_exceptions:
             print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
             traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
-        await ctx.send(f"{error}")
+        if type(error) == commands.PrivateMessageOnly:
+            await ctx.message.delete()
+            await ctx.send(f"{error}", delete_after=10)
+        else:
+            await ctx.send(f"{error}")
 
 
 def setup(bot):
