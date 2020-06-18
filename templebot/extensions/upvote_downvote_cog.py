@@ -47,9 +47,11 @@ class UpvoteDownvoteCog(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
-        if str(message.guild.id) not in self.vote_prepped_data.keys():
+        elif message.guild is None:
             return
-        if message.channel.id == self.vote_prepped_data[str(message.guild.id)]["channel_id"]:
+        elif str(message.guild.id) not in self.vote_prepped_data.keys():
+            return
+        elif message.channel.id == self.vote_prepped_data[str(message.guild.id)]["channel_id"]:
             guild_config_data = self.vote_prepped_data[str(message.guild.id)]
             await self.apply_votes(message, guild_config_data["filter"], guild_config_data["up"],
                                    guild_config_data["down"])

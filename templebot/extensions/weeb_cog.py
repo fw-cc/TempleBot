@@ -51,6 +51,8 @@ class WeebCog(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
+        elif message.guild is None:
+            return
         elif str(message.guild.id) not in self.cog_config["anime_manga_channel_id"].keys():
             return None
         elif str(message.channel.id) in self.cog_config["anime_manga_channel_id"][str(message.guild.id)]:
