@@ -131,10 +131,10 @@ class WebVerificationCog(commands.Cog):
 
         try:
             if remind_verification:
-                await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
+                await member.send(f"You are yet to verify on `{member.guild.name}`. To do so, please visit the "
                                   f"following URL: {self.bot.verification_domain}/{member_uuid}")
             elif force_remind:
-                await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
+                await member.send(f"You are yet to verify on `{member.guild.name}`. To do so, please visit the "
                                   f"following URL: {self.bot.verification_domain}/{member_uuid}")
             else:
                 if not dont_repat:
