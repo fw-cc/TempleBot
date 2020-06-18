@@ -47,6 +47,31 @@ class WebVerificationCog(commands.Cog):
         for member in ctx.guild.members:
             await self.__on_member_join_internal(member, force_remind=remind_existing, dont_repat=True)
 
+    @commands.command(hidden=True, name="clean_verif")
+    @commands.is_owner()
+    @commands.guild_only()
+    async def bulk_clean_verification_role(self, ctx):
+        verification_role_id = self.verification_role_hash_table[str(ctx.guild.id)]
+        verification_role_obj = ctx.guild.get_role(int(verification_role_id))
+        db = self.db_client.gchqbot
+        member_collection = db.members
+        for member in verification_role_obj.members:
+            member_record = await member_collection.find_one(
+                {"user_id": member.id, "guild_id": ctx.guild.id})
+            if member_record is None:
+                await self.__on_member_join_internal(member, force_remind=True)
+            elif not member_record["verified"]:
+                await member.remove_roles(verification_role_obj)
+                try:
+                    await member.send("The verification enforcement service found a mismatch "
+                                      "between your discord roles and the verification database, "
+                                      "this has been rectified by revoking your verified discord "
+                                      "role. Please consult the software operator if this was in "
+                                      "error.")
+                except discord.Forbidden:
+                    pass
+                await self.__on_member_join_internal(member, force_remind=True)
+
     @commands.command(name="verify")
     @commands.dm_only()
     async def user_req_verify(self, ctx, guild_id):
@@ -56,7 +81,7 @@ class WebVerificationCog(commands.Cog):
         member_obj = guild_obj.get_member(ctx.author.id)
         if member_obj is None:
             raise commands.BadArgument("You are not a member of the guild supplied.")
-        await self.__on_member_join_internal(member_obj, force_remind=True, dont_repat=True)
+        await self.__on_member_join_internal(member_obj, force_remind=True)
 
     async def __on_member_join_internal(self, member, force_remind=False, force_reverif=False, dont_repat=False):
         if member.bot:
@@ -99,6 +124,10 @@ class WebVerificationCog(commands.Cog):
             })
         except mongoerrs.DuplicateKeyError:
             pass
+
+        if member_uuid is None and member_record["verified"] and not dont_repat:
+            await member.send("You have already been verified in this guild")
+            return
 
         try:
             if remind_verification:
