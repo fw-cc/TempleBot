@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timedelta
 from pymongo import errors as mongoerrs
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 from timeit import default_timer as timer
 
@@ -33,11 +33,34 @@ class WebVerificationCog(commands.Cog):
 
     @commands.command(hidden=True)
     @commands.is_owner()
-    async def test_add_member(self, ctx):
+    async def test_add_member(self, ctx, target: Optional[discord.Member]):
         self.logger.debug("Test member command called")
-        await self.__on_member_join_internal(ctx.author, force_remind=True, force_reverif=True)
+        if target is None:
+            await self.__on_member_join_internal(ctx.author, force_remind=True, force_reverif=True)
+        else:
+            await self.__on_member_join_internal(target, force_remind=True, force_reverif=True)
 
-    async def __on_member_join_internal(self, member, force_remind=False, force_reverif=False):
+    @commands.command(hidden=True, name="bulk_add")
+    @commands.is_owner()
+    async def bulk_verify_members(self, ctx, remind_existing: Optional[bool]):
+        remind_existing = remind_existing if remind_existing is not None else False
+        for member in ctx.guild.members:
+            await self.__on_member_join_internal(member, force_remind=remind_existing, dont_repat=True)
+
+    @commands.command(name="verify")
+    @commands.dm_only()
+    async def user_req_verify(self, ctx, guild_id):
+        guild_obj = self.bot.get_guild(int(guild_id))
+        if guild_obj is None:
+            raise commands.BadArgument("Guild not found, likely the result of improper `guild_id` argument.")
+        member_obj = guild_obj.get_member(ctx.author.id)
+        if member_obj is None:
+            raise commands.BadArgument("You are not a member of the guild supplied.")
+        await self.__on_member_join_internal(member_obj, force_remind=True, dont_repat=True)
+
+    async def __on_member_join_internal(self, member, force_remind=False, force_reverif=False, dont_repat=False):
+        if member.bot:
+            return
         db = self.db_client.gchqbot
         member_collection = db.members
         ppmp_notice_collection = db.ppmp_notice
@@ -77,11 +100,18 @@ class WebVerificationCog(commands.Cog):
         except mongoerrs.DuplicateKeyError:
             pass
 
-        if remind_verification or force_remind:
-            await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
-                              f"following URL: {self.bot.verification_domain}/{member_uuid}")
-        else:
-            await self.__repatriate_member(member, member_record)
+        try:
+            if remind_verification:
+                await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
+                                  f"following URL: {self.bot.verification_domain}/{member_uuid}")
+            elif force_remind:
+                await member.send(f"You are yet to verify on {member.guild.name}. To do so, please visit the "
+                                  f"following URL: {self.bot.verification_domain}/{member_uuid}")
+            else:
+                if not dont_repat:
+                    await self.__repatriate_member(member, member_record)
+        except discord.errors.Forbidden:
+            pass
 
     async def __member_verification_flow(self, member_record) -> Tuple[discord.Guild, discord.Member]:
         guild_obj = self.bot.get_guild(member_record["guild_id"])
