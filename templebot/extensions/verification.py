@@ -59,6 +59,7 @@ class WebVerificationCog(commands.Cog):
             member_record = await member_collection.find_one(
                 {"user_id": member.id, "guild_id": ctx.guild.id})
             if member_record is None:
+                await member.remove_roles(verification_role_obj)
                 await self.__on_member_join_internal(member, force_remind=True)
             elif not member_record["verified"]:
                 await member.remove_roles(verification_role_obj)
@@ -158,7 +159,7 @@ class WebVerificationCog(commands.Cog):
             {"_id": str(member_uuid)},
             {"$set": {"verified": True}}
         )
-        await member_obj.send(f"You have now been verified on {guild_obj}.")
+        await member_obj.send(f"You have now been verified on `{guild_obj}`.")
         return member_record
 
     @commands.Cog.listener()
