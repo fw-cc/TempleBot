@@ -20,7 +20,7 @@ hyperframe==5.2.0
 idna==2.9
 itsdangerous==1.1.0
 jikanpy==4.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 MarkupSafe==1.1.1
 motor==2.1.0
 multidict==4.7.5
